@@ -1,0 +1,4074 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="KITOKITO">
+<title>KITOKITO 生産管理</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; background: #f5f5f7; color: #1d1d1f; }
+.container { max-width: 800px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
+.subtitle { text-align: center; color: #86868b; font-size: 14px; margin-bottom: 24px; }
+
+/* === トップ画面 === */
+.role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+.role-grid .role-btn:nth-child(5) { grid-column: 1 / -1; max-width: 50%; justify-self: center; }
+.role-btn { background: white; border: none; border-radius: 16px; padding: 24px 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.15s; }
+.role-btn:active { transform: scale(0.96); }
+.role-icon { font-size: 48px; margin-bottom: 8px; }
+.role-name { font-size: 18px; font-weight: 600; }
+.role-desc { font-size: 12px; color: #86868b; margin-top: 4px; }
+
+/* === 共通ナビ === */
+.back-btn { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; color: #0071e3; font-size: 16px; padding: 8px 0; cursor: pointer; margin-bottom: 16px; }
+
+/* === 商品選択画面 === */
+.product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 500px) { .product-grid { grid-template-columns: repeat(2, 1fr); } }
+.product-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.15s; }
+.product-card:active { transform: scale(0.96); }
+.product-card img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+.product-card .label { padding: 8px; text-align: center; font-weight: 600; font-size: 14px; background: #f0e6f6; }
+
+/* === 入力画面 === */
+.form-section { background: white; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.form-section h3 { font-size: 16px; margin-bottom: 12px; color: #1d1d1f; }
+.form-label { font-size: 14px; color: #86868b; margin-bottom: 8px; display: block; }
+
+/* 名前ボタン */
+.name-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.name-btn { padding: 14px 8px; border-radius: 10px; border: 2px solid #e5e5ea; background: white; font-size: 16px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.name-btn.selected { border-color: #0071e3; background: #e8f2ff; color: #0071e3; }
+
+/* カラーボタン */
+.color-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.color-btn { padding: 12px 8px; border-radius: 10px; border: 2px solid #e5e5ea; background: white; font-size: 14px; cursor: pointer; transition: all 0.15s; text-align: center; }
+.color-btn.selected { border-color: #0071e3; background: #e8f2ff; }
+.material-list { display: flex; flex-direction: column; gap: 4px; }
+.material-list-item { padding: 14px 16px; border-radius: 10px; border: 2px solid #e5e5ea; background: white; font-size: 16px; cursor: pointer; transition: all 0.15s; }
+.material-list-item.selected { border-color: #0071e3; background: #e8f2ff; font-weight: 600; }
+
+/* 数量 */
+.qty-control { display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: 8px; }
+.qty-btn { width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 28px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.qty-btn.minus { background: #f5f5f7; color: #1d1d1f; }
+.qty-btn.plus { background: #0071e3; color: white; }
+.qty-btn:active { transform: scale(0.9); }
+.qty-display { font-size: 48px; font-weight: 700; min-width: 80px; text-align: center; display: none; }
+.qty-input { width: 80px; font-size: 32px; font-weight: 700; text-align: center; border: 2px solid #e5e5ea; border-radius: 10px; padding: 6px; -moz-appearance: textfield; }
+.qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qty-input:focus { border-color: #0071e3; outline: none; }
+.bgrade-qty .qty-input { width: 60px; font-size: 20px; padding: 6px; }
+
+/* パーツチェックリスト */
+.parts-list { list-style: none; }
+.parts-list li { padding: 12px 0; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 12px; font-size: 15px; }
+.parts-list li:last-child { border: none; }
+.check-box { width: 28px; height: 28px; border-radius: 8px; border: 2px solid #d1d1d6; background: white; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; flex-shrink: 0; }
+.check-box.checked { background: #34c759; border-color: #34c759; }
+.check-box.checked::after { content: '✓'; color: white; font-size: 18px; font-weight: 700; }
+
+/* 送信ボタン */
+.submit-btn { width: 100%; padding: 18px; border: none; border-radius: 14px; font-size: 18px; font-weight: 600; cursor: pointer; transition: all 0.15s; margin-top: 8px; }
+.submit-btn.ready { background: #0071e3; color: white; }
+.submit-btn.not-ready { background: #e5e5ea; color: #86868b; }
+.submit-btn:active { transform: scale(0.98); }
+
+/* 完了画面 */
+.success-screen { text-align: center; padding: 60px 20px; }
+.success-icon { font-size: 80px; margin-bottom: 16px; }
+.success-msg { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+.success-detail { color: #86868b; font-size: 16px; margin-bottom: 32px; }
+
+/* ダッシュボード */
+.alert-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.alert-card.urgent { border-left: 4px solid #ff3b30; }
+.alert-card.warning { border-left: 4px solid #ff9500; }
+.alert-card.ok { border-left: 4px solid #34c759; }
+.alert-title { font-weight: 600; font-size: 15px; }
+.alert-detail { color: #86868b; font-size: 13px; margin-top: 4px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.badge.red { background: #ffe5e5; color: #ff3b30; }
+.badge.orange { background: #fff3e0; color: #ff9500; }
+.badge.green { background: #e5f9e7; color: #34c759; }
+
+.progress-bar-bg { height: 8px; background: #f0f0f0; border-radius: 4px; margin-top: 8px; }
+.progress-bar { height: 8px; background: #0071e3; border-radius: 4px; transition: width 0.3s; }
+
+.section-title { font-size: 18px; font-weight: 600; margin: 20px 0 12px; }
+
+/* メニューボタン */
+.menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
+.menu-btn { background: white; border: none; border-radius: 12px; padding: 20px 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.15s; }
+.menu-btn:active { transform: scale(0.96); }
+.menu-btn .icon { font-size: 32px; margin-bottom: 6px; }
+.menu-btn .text { font-size: 14px; font-weight: 500; }
+
+.hidden { display: none !important; }
+
+/* 進捗パイプライン */
+.pipeline { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.pipeline-step { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #f0f0f0; color: #86868b; }
+.pipeline-step.active { background: #e8f2ff; color: #0071e3; font-weight: 600; }
+.pipeline-step.done { background: #e5f9e7; color: #34c759; }
+.no-data { color: #86868b; font-size: 14px; padding: 12px 0; }
+.stock-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.stock-table th, .stock-table td { padding: 8px 12px; text-align: left; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
+.stock-table th { color: #86868b; font-weight: 500; font-size: 13px; }
+.stock-table td.num { text-align: right; font-weight: 600; }
+.stock-table tr:last-child td { border-bottom: none; }
+
+/* B品入力セクション */
+.bgrade-section { background: #fff8f0; border-radius: 12px; padding: 16px; margin-top: 8px; }
+.bgrade-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+.bgrade-label { font-size: 14px; color: #86868b; }
+.bgrade-qty { display: flex; align-items: center; gap: 12px; }
+.bgrade-qty .qty-btn { width: 36px; height: 36px; font-size: 18px; }
+.bgrade-qty .qty-display { font-size: 24px; min-width: 40px; }
+
+/* 発注待ちリスト */
+.pending-order { background: white; border-radius: 12px; padding: 16px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.15s; }
+.pending-order:active { transform: scale(0.98); }
+.pending-order.selected { border: 2px solid #0071e3; }
+.pending-order .order-material { font-weight: 600; font-size: 16px; }
+.pending-order .order-meta { color: #86868b; font-size: 13px; margin-top: 4px; }
+.arrive-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.arrive-option { padding: 16px; border-radius: 12px; border: 2px solid #e5e5ea; background: white; font-size: 16px; font-weight: 500; cursor: pointer; text-align: center; }
+.arrive-option.selected { border-color: #0071e3; background: #e8f2ff; }
+.arrive-option.normal { }
+.arrive-option.changed { }
+.no-pending { text-align: center; padding: 40px 20px; color: #86868b; font-size: 16px; }
+
+/* === ダッシュボード タブ === */
+.dash-tabs { display: flex; gap: 0; border-bottom: 2px solid #e5e5ea; margin-bottom: 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.dash-tab { flex: 0 0 auto; padding: 10px 16px; font-size: 14px; font-weight: 600; background: none; border: none; border-bottom: 3px solid transparent; color: #86868b; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+.dash-tab.active { color: #0071e3; border-bottom-color: #0071e3; }
+.dash-tab-content { display: none; }
+.dash-tab-content.active { display: block; }
+
+/* === 横スクロールテーブル === */
+.table-scroll-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -16px; padding: 0 16px; }
+.zentai-table { border-collapse: collapse; font-size: 12px; min-width: 900px; width: 100%; }
+.zentai-table th, .zentai-table td { padding: 6px 8px; border: 1px solid #e5e5ea; text-align: center; white-space: nowrap; }
+.zentai-table th { background: #f5f5f7; color: #86868b; font-weight: 600; font-size: 11px; position: sticky; top: 0; z-index: 2; }
+.zentai-table th:first-child, .zentai-table td:first-child { position: sticky; left: 0; z-index: 1; background: white; }
+.zentai-table th:first-child { z-index: 3; background: #f5f5f7; }
+.zentai-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.zentai-table tr:nth-child(even) td { background: #fafafa; }
+.zentai-table tr:nth-child(even) td:first-child { background: #fafafa; }
+.zentai-table tr:hover td { background: #f0f4ff; }
+.zentai-table tr:hover td:first-child { background: #f0f4ff; }
+
+/* === 編集可能セル === */
+.editable-cell { cursor: pointer; position: relative; min-width: 48px; }
+.editable-cell:hover { background: #e8f2ff !important; }
+.editable-cell input { width: 56px; padding: 2px 4px; font-size: 12px; border: 2px solid #0071e3; border-radius: 4px; text-align: right; background: white; outline: none; }
+
+/* === 棚卸シート・販売数テーブル === */
+.tana-sheet-table, .hanbai-table { border-collapse: collapse; font-size: 12px; min-width: 600px; width: 100%; }
+.tana-sheet-table th, .tana-sheet-table td, .hanbai-table th, .hanbai-table td { padding: 6px 8px; border: 1px solid #e5e5ea; text-align: center; white-space: nowrap; }
+.tana-sheet-table th, .hanbai-table th { background: #f5f5f7; color: #86868b; font-weight: 600; font-size: 11px; position: sticky; top: 0; z-index: 2; }
+.tana-sheet-table th:first-child, .tana-sheet-table td:first-child, .hanbai-table th:first-child, .hanbai-table td:first-child { position: sticky; left: 0; z-index: 1; background: white; font-weight: 600; }
+.tana-sheet-table th:first-child, .hanbai-table th:first-child { z-index: 3; background: #f5f5f7; }
+.tana-sheet-table tr:nth-child(even) td, .hanbai-table tr:nth-child(even) td { background: #fafafa; }
+.tana-sheet-table tr:nth-child(even) td:first-child, .hanbai-table tr:nth-child(even) td:first-child { background: #fafafa; }
+
+/* === ダッシュボード入力ボタン（タブバー横） === */
+.dash-header-actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.dash-header-actions .menu-btn { padding: 10px 12px; font-size: 13px; flex: 1; min-width: 120px; }
+.dash-header-actions .menu-btn .icon { font-size: 20px; margin-bottom: 2px; }
+.dash-header-actions .menu-btn .text { font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+
+  <!-- ========== トップ画面 ========== -->
+  <div id="screen-top">
+    <h1>KITOKITO</h1>
+    <p class="subtitle">生産管理システム</p>
+    <div class="role-grid">
+      <button class="role-btn" onclick="showDashboard('megu')">
+        <div class="role-icon">📊</div>
+        <div class="role-name">全体管理</div>
+        <div class="role-desc">材料アラート・生産進捗・売上</div>
+      </button>
+      <button class="role-btn" onclick="showDashboard('mom')">
+        <div class="role-icon">🧵</div>
+        <div class="role-name">製造管理</div>
+        <div class="role-desc">急ぎ・進行中・次の仕事</div>
+      </button>
+      <button class="role-btn" onclick="showScreen('screen-dash-kenpin')">
+        <div class="role-icon">🔍</div>
+        <div class="role-name">検品</div>
+        <div class="role-desc">納品された製品の検品</div>
+      </button>
+      <button class="role-btn" onclick="showDashboard('yamada')">
+        <div class="role-icon">🖨</div>
+        <div class="role-name">裁断・プリント・入庫</div>
+        <div class="role-desc">裁断・プリント・入庫の記録</div>
+      </button>
+      <button class="role-btn" onclick="showScreen('screen-naishoku-menu')">
+        <div class="role-icon">✂️</div>
+        <div class="role-name">内職</div>
+        <div class="role-desc">持ち出し・納品</div>
+      </button>
+    </div>
+    <div style="text-align:center; margin-top:24px;">
+      <button class="back-btn" onclick="showScreen('screen-settings')" style="color:#86868b; font-size:14px;">⚙️ データ管理・設定</button>
+    </div>
+  </div>
+
+  <!-- ========== データ管理・設定 ========== -->
+  <div id="screen-settings" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-top')">← もどる</button>
+    <h1>⚙️ データ管理</h1>
+    <p class="subtitle">バックアップ・棚卸し・データ管理</p>
+
+    <div class="form-section">
+      <h3>📤 データのバックアップ</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">全記録をファイルに保存します。定期的にバックアップしてください。</p>
+      <button class="submit-btn ready" onclick="exportData()" style="margin-top:0;">バックアップを保存する</button>
+    </div>
+
+    <div class="form-section">
+      <h3>📥 データの復元</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">バックアップファイルからデータを復元します。</p>
+      <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importData(event)">
+      <button class="submit-btn ready" onclick="document.getElementById('import-file').click()" style="margin-top:0; background:#34c759;">バックアップから復元する</button>
+    </div>
+
+    <div class="form-section">
+      <h3>📋 棚卸し（在庫の一括登録）</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">現在の在庫数を商品×カラーごとに登録できます。</p>
+      <button class="submit-btn ready" onclick="showScreen('screen-tanaoroshi')" style="margin-top:0; background:#ff9500;">棚卸しを始める</button>
+    </div>
+
+    <div class="form-section">
+      <h3>📂 初期データ取り込み</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">棚卸しJSONデータを現在のデータにマージして取り込みます。既存データは消えません。</p>
+      <input type="file" id="initial-import-file" accept=".json" style="display:none;" onchange="importInitialData(event)">
+      <button class="submit-btn ready" onclick="document.getElementById('initial-import-file').click()" style="margin-top:0; background:#5856d6;">初期在庫データを取り込む</button>
+    </div>
+
+    <div class="form-section">
+      <h3>📊 記録件数</h3>
+      <div id="settings-record-count" style="font-size:14px; color:#86868b;"></div>
+    </div>
+
+    <div class="form-section">
+      <h3>🔄 データ同期</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">Googleスプレッドシートとデータを同期します。</p>
+      <button class="submit-btn ready" onclick="syncFromGAS().then(() => refreshSettingsInfo())" style="margin-top:0; background:#0071e3;">スプレッドシートから同期</button>
+    </div>
+  </div>
+
+  <!-- ========== 棚卸し画面 ========== -->
+  <div id="screen-tanaoroshi" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-settings')">← もどる</button>
+    <h1>📋 棚卸し</h1>
+    <p class="subtitle">商品×カラーごとに在庫数を入力</p>
+
+    <div class="form-section">
+      <h3>商品を選んでください</h3>
+      <div class="color-grid" id="tana-product-buttons"></div>
+    </div>
+
+    <div class="form-section" id="tana-color-section" style="display:none;">
+      <h3>カラーを選んでください</h3>
+      <div class="color-grid" id="tana-color-buttons"></div>
+    </div>
+
+    <div class="form-section" id="tana-qty-section" style="display:none;">
+      <h3 id="tana-qty-label">在庫数</h3>
+      <div class="bgrade-section">
+        <div class="bgrade-row">
+          <span class="bgrade-label">OK品</span>
+          <div class="bgrade-qty">
+            <button class="qty-btn minus" onclick="changeTanaQty('ok', -1)">−</button>
+            <input type="number" class="qty-input" id="tana-ok-input" min="0" value="0" oninput="updateTanaBtn()">
+            <button class="qty-btn plus" onclick="changeTanaQty('ok', 1)">+</button>
+          </div>
+        </div>
+        <div class="bgrade-row">
+          <span class="bgrade-label">B品</span>
+          <div class="bgrade-qty">
+            <button class="qty-btn minus" onclick="changeTanaQty('bgrade', -1)">−</button>
+            <input type="number" class="qty-input" id="tana-bgrade-input" min="0" value="0" oninput="updateTanaBtn()">
+            <button class="qty-btn plus" onclick="changeTanaQty('bgrade', 1)">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="submit-btn not-ready" id="tana-submit-btn" onclick="submitTanaoroshi()">
+      商品を選んでください
+    </button>
+
+    <div class="form-section" style="margin-top:16px;">
+      <h3>登録済みの棚卸しデータ</h3>
+      <div id="tana-registered-list"></div>
+    </div>
+  </div>
+
+  <!-- ========== 内職メニュー ========== -->
+  <div id="screen-naishoku-menu" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-top')">← もどる</button>
+    <h1>✂️ 内職</h1>
+    <p class="subtitle">作業を選んでください</p>
+    <div class="menu-grid">
+      <button class="menu-btn" onclick="showScreen('screen-select-name')">
+        <div class="icon">🎒</div>
+        <div class="text">持ち出し</div>
+      </button>
+      <button class="menu-btn" onclick="startNouhin()">
+        <div class="icon">📦</div>
+        <div class="text">納品</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== 名前選択 ========== -->
+  <div id="screen-select-name" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-naishoku-menu')">← もどる</button>
+    <h1>お名前を選んでください</h1>
+    <p class="subtitle" id="today-date"></p>
+    <div class="form-section">
+      <div class="name-grid" id="name-buttons">
+        <!-- 名前ボタンはJSで生成 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 商品選択 ========== -->
+  <div id="screen-select-product" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-select-name')">← もどる</button>
+    <h1 id="greeting"></h1>
+    <p class="subtitle">持ち出す商品をタップしてください</p>
+    <div class="product-grid" id="product-grid">
+      <!-- 商品カードはJSで生成 -->
+    </div>
+  </div>
+
+  <!-- ========== カラー・数量・パーツ入力 ========== -->
+  <div id="screen-input" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-select-product')">← もどる</button>
+    <h1 id="selected-product-name"></h1>
+
+    <div class="form-section">
+      <h3>カラーを選んでください</h3>
+      <div class="color-grid" id="color-buttons"></div>
+    </div>
+
+    <div class="form-section">
+      <h3>数量（表地の枚数）</h3>
+      <div class="qty-control">
+        <button class="qty-btn minus" onclick="changeQty(-1)">−</button>
+        <input type="number" class="qty-input" id="qty-input" min="1" value="5" onchange="syncQtyFromInput('mochidashi')">
+        <button class="qty-btn plus" onclick="changeQty(1)">+</button>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h3>パーツを確認してください</h3>
+      <ul class="parts-list" id="parts-list"></ul>
+    </div>
+
+    <button class="submit-btn not-ready" id="submit-btn" onclick="submitForm()">
+      カラーを選んでください
+    </button>
+  </div>
+
+  <!-- ========== 完了画面 ========== -->
+  <div id="screen-success" class="hidden">
+    <div class="success-screen">
+      <div class="success-icon">✅</div>
+      <div class="success-msg">記録しました！</div>
+      <div class="success-detail" id="success-detail"></div>
+      <button class="role-btn" onclick="showScreen('screen-select-product')" style="display:inline-block; padding:16px 32px;">
+        <div class="role-name">続けて入力する</div>
+      </button>
+      <br><br>
+      <button class="back-btn" onclick="showScreen('screen-top')">トップに戻る</button>
+    </div>
+  </div>
+
+  <!-- ========== めぐちゃんダッシュボード ========== -->
+  <div id="screen-dash-megu" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-top')">← もどる</button>
+    <h1>📊 全体管理</h1>
+
+    <div class="dash-header-actions">
+      <button class="menu-btn" onclick="startMaterial('order')">
+        <div class="icon">🛒</div>
+        <div class="text">材料を発注した</div>
+      </button>
+      <button class="menu-btn" onclick="startArrive()">
+        <div class="icon">📥</div>
+        <div class="text">材料が届いた</div>
+      </button>
+    </div>
+
+    <div class="dash-tabs">
+      <button class="dash-tab active" onclick="switchDashTab('zentai')">全体管理</button>
+      <button class="dash-tab" onclick="switchDashTab('tanaoroshi-sheet')">棚卸シート</button>
+      <button class="dash-tab" onclick="switchDashTab('hanbai')">販売数</button>
+      <button class="dash-tab" onclick="switchDashTab('parts-stock')">パーツ在庫</button>
+    </div>
+
+    <!-- Tab 1: 全体管理 -->
+    <div class="dash-tab-content active" id="dash-tab-zentai">
+      <div class="table-scroll-wrapper">
+        <table class="zentai-table" id="zentai-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="section-title">🔴 材料アラート</div>
+      <div id="megu-material-alerts"></div>
+
+      <div class="section-title">📊 生産進捗</div>
+      <div id="megu-production-progress"></div>
+
+      <div class="section-title">📦 在庫サマリー</div>
+      <div id="megu-stock-summary"></div>
+    </div>
+
+    <!-- Tab 2: 棚卸シート -->
+    <div class="dash-tab-content" id="dash-tab-tanaoroshi-sheet">
+      <div style="margin-bottom:12px;">
+        <button class="submit-btn ready" onclick="showScreen('screen-tanaoroshi')" style="padding:12px; font-size:15px;">棚卸しを入力する</button>
+      </div>
+      <div class="table-scroll-wrapper">
+        <table class="tana-sheet-table" id="tana-sheet-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 3: 販売数 -->
+    <div class="dash-tab-content" id="dash-tab-hanbai">
+      <div class="table-scroll-wrapper">
+        <table class="hanbai-table" id="hanbai-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 4: パーツ在庫 -->
+    <div class="dash-tab-content" id="dash-tab-parts-stock">
+      <div class="parts-filter-bar" style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="color-btn selected" onclick="filterParts('ALL')">すべて</button>
+        <button class="color-btn" onclick="filterParts('FA')">FA 表地</button>
+        <button class="color-btn" onclick="filterParts('FB')">FB 裏地</button>
+        <button class="color-btn" onclick="filterParts('FC')">FC ポケット</button>
+        <button class="color-btn" onclick="filterParts('H')">H ひも</button>
+        <button class="color-btn" onclick="filterParts('B')">B 副資材</button>
+      </div>
+      <div class="table-scroll-wrapper">
+        <table class="zentai-table" id="parts-stock-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== お母さんダッシュボード ========== -->
+  <div id="screen-dash-mom" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-top')">← もどる</button>
+    <h1>🧵 製造管理</h1>
+    <p class="subtitle">急ぎ・進行中・次の仕事</p>
+
+    <div class="section-title">🧵 今走ってる仕事（内職持ち出し中）</div>
+    <div id="mom-active-jobs"></div>
+
+    <div class="section-title">📦 最近の入庫</div>
+    <div id="mom-recent-stock"></div>
+
+    <div class="section-title">📋 全体の在庫状況</div>
+    <div id="mom-stock-overview"></div>
+  </div>
+
+  <!-- ========== 検品ダッシュボード ========== -->
+  <div id="screen-dash-kenpin" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-top')">← もどる</button>
+    <h1>🔍 検品</h1>
+    <p class="subtitle">納品された製品の検品</p>
+
+    <div class="section-title">📦 検品待ち</div>
+    <div id="kenpin-dash-pending"></div>
+
+    <div class="section-title" style="margin-top:24px">📝 入力</div>
+    <div class="menu-grid">
+      <button class="menu-btn" onclick="startKenpin()">
+        <div class="icon">🔍</div>
+        <div class="text">検品する</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== 検品画面 ========== -->
+  <div id="screen-kenpin" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-dash-kenpin')">← もどる</button>
+    <h1>🔍 検品する</h1>
+    <p class="subtitle">納品された製品を検品します</p>
+
+    <div class="form-section">
+      <h3>検品待ち</h3>
+      <div id="kenpin-pending-list"></div>
+    </div>
+
+    <div class="form-section" id="kenpin-detail-section" style="display:none;">
+      <h3>検品内容</h3>
+      <div id="kenpin-detail"></div>
+      <div class="bgrade-section" style="margin-top:12px;">
+        <div class="bgrade-row">
+          <span class="bgrade-label">OK品</span>
+          <div class="bgrade-qty">
+            <button class="qty-btn minus" onclick="changeKenpinQty('ok', -1)">−</button>
+            <input type="number" class="qty-input" id="kenpin-ok-input" min="0" value="0" onchange="syncKenpinFromInput('ok')">
+            <button class="qty-btn plus" onclick="changeKenpinQty('ok', 1)">+</button>
+          </div>
+        </div>
+        <div class="bgrade-row">
+          <span class="bgrade-label">B品（割引販売可能）</span>
+          <div class="bgrade-qty">
+            <button class="qty-btn minus" onclick="changeKenpinQty('bgrade', -1)">−</button>
+            <input type="number" class="qty-input" id="kenpin-bgrade-input" min="0" value="0" onchange="syncKenpinFromInput('bgrade')">
+            <button class="qty-btn plus" onclick="changeKenpinQty('bgrade', 1)">+</button>
+          </div>
+        </div>
+        <div class="bgrade-row">
+          <span class="bgrade-label">不可（廃棄）</span>
+          <div class="bgrade-qty">
+            <button class="qty-btn minus" onclick="changeKenpinQty('rejected', -1)">−</button>
+            <input type="number" class="qty-input" id="kenpin-rejected-input" min="0" value="0" onchange="syncKenpinFromInput('rejected')">
+            <button class="qty-btn plus" onclick="changeKenpinQty('rejected', 1)">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="submit-btn not-ready" id="kenpin-submit-btn" onclick="submitKenpin()">
+      検品する納品を選んでください
+    </button>
+  </div>
+
+  <!-- ========== 山田さんダッシュボード ========== -->
+  <div id="screen-dash-yamada" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-top')">← もどる</button>
+    <h1>✂️ 裁断・プリント・入庫</h1>
+    <p class="subtitle">裁断・プリント・入庫の記録</p>
+
+    <div class="section-title">✂️ 最近の裁断記録</div>
+    <div id="yamada-recent-saidan"></div>
+
+    <div class="section-title">🖨 最近のプリント記録</div>
+    <div id="yamada-recent-print"></div>
+
+    <div class="section-title">📦 入庫待ち</div>
+    <div id="yamada-nyuko-pending"></div>
+
+    <div class="section-title" style="margin-top:24px">📝 入力</div>
+    <div class="menu-grid">
+      <button class="menu-btn" onclick="startWork('saidan')">
+        <div class="icon">✂️</div>
+        <div class="text">裁断完了</div>
+      </button>
+      <button class="menu-btn" onclick="startWork('print')">
+        <div class="icon">🖨</div>
+        <div class="text">プリント完了</div>
+      </button>
+      <button class="menu-btn" onclick="startWork('nyuko')">
+        <div class="icon">📥</div>
+        <div class="text">入庫する</div>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ========== 内職：納品 ========== -->
+  <div id="screen-nouhin-select-name" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-naishoku-menu')">← もどる</button>
+    <h1>📦 納品</h1>
+    <p class="subtitle">お名前を選んでください</p>
+    <div class="form-section">
+      <div class="name-grid" id="nouhin-name-buttons"></div>
+    </div>
+  </div>
+
+  <div id="screen-nouhin-select-product" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-nouhin-select-name')">← もどる</button>
+    <h1 id="nouhin-greeting"></h1>
+    <p class="subtitle">納品する商品をタップしてください</p>
+    <div class="product-grid" id="nouhin-product-grid"></div>
+  </div>
+
+  <div id="screen-nouhin-input" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-nouhin-select-product')">← もどる</button>
+    <h1 id="nouhin-product-name"></h1>
+
+    <div class="form-section">
+      <h3>カラーを選んでください</h3>
+      <div class="color-grid" id="nouhin-color-buttons"></div>
+    </div>
+
+    <div class="form-section">
+      <h3>納品数量</h3>
+      <div class="qty-control">
+        <button class="qty-btn minus" onclick="changeNouhinQty(-1)">−</button>
+        <input type="number" class="qty-input" id="nouhin-qty-input" min="1" value="5" onchange="syncQtyFromInput('nouhin')">
+        <button class="qty-btn plus" onclick="changeNouhinQty(1)">+</button>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h3>仕上がり確認</h3>
+      <ul class="parts-list" id="nouhin-check-list"></ul>
+    </div>
+
+    <button class="submit-btn not-ready" id="nouhin-submit-btn" onclick="submitNouhin()">
+      カラーを選んでください
+    </button>
+  </div>
+
+  <div id="screen-nouhin-success" class="hidden">
+    <div class="success-screen">
+      <div class="success-icon">📦✅</div>
+      <div class="success-msg">納品を記録しました！</div>
+      <div class="success-detail" id="nouhin-success-detail"></div>
+      <button class="role-btn" onclick="showScreen('screen-nouhin-select-product')" style="display:inline-block; padding:16px 32px;">
+        <div class="role-name">続けて納品する</div>
+      </button>
+      <br><br>
+      <button class="back-btn" onclick="showScreen('screen-top')">トップに戻る</button>
+    </div>
+  </div>
+
+  <!-- ========== 裁断完了 ========== -->
+  <div id="screen-saidan" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-dash-yamada')">← もどる</button>
+    <h1>✂️ 裁断完了</h1>
+    <p class="subtitle">裁断した内容を記録します</p>
+
+    <div class="form-section">
+      <h3>商品を選んでください</h3>
+      <div class="color-grid" id="saidan-product-buttons"></div>
+    </div>
+
+    <div class="form-section" id="saidan-color-section" style="display:none;">
+      <h3>カラーを選んでください</h3>
+      <div class="color-grid" id="saidan-color-buttons"></div>
+    </div>
+
+    <div class="form-section" id="saidan-category-section" style="display:none;">
+      <h3>パーツカテゴリを選んでください</h3>
+      <div class="color-grid" id="saidan-category-buttons"></div>
+    </div>
+
+    <div class="form-section" id="saidan-part-section" style="display:none;">
+      <h3>パーツを選んでください</h3>
+      <div class="material-list" id="saidan-part-list"></div>
+    </div>
+
+    <div class="form-section">
+      <h3>裁断枚数</h3>
+      <div class="qty-control">
+        <button class="qty-btn minus" onclick="changeWorkQty('saidan', -1)">−</button>
+        <input type="number" class="qty-input" id="saidan-qty-input" min="1" value="10" onchange="syncWorkQtyFromInput('saidan')">
+        <button class="qty-btn plus" onclick="changeWorkQty('saidan', 1)">+</button>
+      </div>
+    </div>
+
+    <button class="submit-btn not-ready" id="saidan-submit-btn" onclick="submitWork('saidan')">
+      商品を選んでください
+    </button>
+  </div>
+
+  <!-- ========== プリント完了 ========== -->
+  <div id="screen-print" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-dash-yamada')">← もどる</button>
+    <h1>🖨 プリント完了</h1>
+    <p class="subtitle">プリントした内容を記録します</p>
+
+    <div class="form-section">
+      <h3>商品を選んでください</h3>
+      <div class="color-grid" id="print-product-buttons"></div>
+    </div>
+
+    <div class="form-section">
+      <h3>カラーを選んでください</h3>
+      <div class="color-grid" id="print-color-buttons"></div>
+    </div>
+
+    <div class="form-section">
+      <h3>プリント枚数</h3>
+      <div class="qty-control">
+        <button class="qty-btn minus" onclick="changeWorkQty('print', -1)">−</button>
+        <input type="number" class="qty-input" id="print-qty-input" min="1" value="10" onchange="syncWorkQtyFromInput('print')">
+        <button class="qty-btn plus" onclick="changeWorkQty('print', 1)">+</button>
+      </div>
+    </div>
+
+    <button class="submit-btn not-ready" id="print-submit-btn" onclick="submitWork('print')">
+      商品を選んでください
+    </button>
+  </div>
+
+  <!-- ========== 入庫する ========== -->
+  <div id="screen-nyuko" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-dash-yamada')">← もどる</button>
+    <h1>📥 入庫する</h1>
+    <p class="subtitle">検品済みの製品を在庫に入れます</p>
+
+    <div class="form-section">
+      <h3>検品済み（入庫待ち）</h3>
+      <div id="nyuko-pending-list"></div>
+    </div>
+
+    <div class="form-section" id="nyuko-confirm-section" style="display:none;">
+      <h3>入庫内容</h3>
+      <div id="nyuko-confirm-detail"></div>
+    </div>
+
+    <button class="submit-btn not-ready" id="nyuko-submit-btn" onclick="submitNyuko()">
+      検品済みの製品を選んでください
+    </button>
+  </div>
+
+  <!-- ========== 材料を発注した ========== -->
+  <div id="screen-order" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-dash-megu')">← もどる</button>
+    <h1>🛒 材料を発注した</h1>
+    <p class="subtitle">発注した材料を記録します</p>
+
+    <div class="form-section">
+      <h3>カテゴリ</h3>
+      <div class="color-grid" id="order-category-buttons"></div>
+    </div>
+
+    <div class="form-section" id="order-material-section" style="display:none;">
+      <h3>材料を選んでください</h3>
+      <div id="order-material-list" class="material-list"></div>
+    </div>
+
+    <div class="form-section" id="order-qty-section" style="display:none;">
+      <h3>数量</h3>
+      <div class="qty-control">
+        <button class="qty-btn minus" onclick="changeOrderQty(-1)">−</button>
+        <input type="number" class="qty-input" id="order-qty-input" min="1" value="1" onchange="syncOrderQtyFromInput()">
+        <button class="qty-btn plus" onclick="changeOrderQty(1)">+</button>
+      </div>
+      <p style="text-align:center; color:#86868b; font-size:14px; margin-top:8px;" id="order-qty-unit"></p>
+    </div>
+
+    <div class="form-section">
+      <h3>価格（税込・任意）</h3>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="number" id="order-price" min="0" placeholder="0" style="width:120px; padding:14px; border:2px solid #e5e5ea; border-radius:10px; font-size:16px; text-align:right;">
+        <span style="font-size:16px; color:#86868b;">円</span>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h3>支払い方法（任意）</h3>
+      <div class="color-grid" id="order-payment-buttons">
+        <button class="color-btn" onclick="selectPayment('カード', this)">カード</button>
+        <button class="color-btn" onclick="selectPayment('銀行振込', this)">銀行振込</button>
+        <button class="color-btn" onclick="selectPayment('現金', this)">現金</button>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h3>メモ（任意）</h3>
+      <input type="text" id="order-memo" placeholder="例：楽天で注文、3/28届く予定" style="width:100%; padding:14px; border:2px solid #e5e5ea; border-radius:10px; font-size:16px;">
+    </div>
+
+    <button class="submit-btn not-ready" id="order-submit-btn" onclick="submitMaterial('order')">
+      材料を選んでください
+    </button>
+  </div>
+
+  <!-- ========== 材料が届いた ========== -->
+  <div id="screen-arrive" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-dash-megu')">← もどる</button>
+    <h1>📥 材料が届いた</h1>
+    <p class="subtitle">届いた材料を記録します</p>
+
+    <div class="form-section" id="arrive-pending-section">
+      <h3>発注中の材料</h3>
+      <div id="arrive-pending-list"></div>
+    </div>
+
+    <div class="form-section" id="arrive-options-section" style="display:none;">
+      <h3>入荷状況</h3>
+      <div class="arrive-options">
+        <button class="arrive-option normal" onclick="selectArriveOption('normal')">予定通り</button>
+        <button class="arrive-option changed" onclick="selectArriveOption('changed')">変更あり</button>
+      </div>
+    </div>
+
+    <div class="form-section" id="arrive-price-section" style="display:none;">
+      <h3>価格確認（税込・任意）</h3>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="number" id="arrive-price" min="0" placeholder="0" style="width:120px; padding:14px; border:2px solid #e5e5ea; border-radius:10px; font-size:16px; text-align:right;">
+        <span style="font-size:16px; color:#86868b;">円</span>
+      </div>
+      <p style="color:#86868b; font-size:13px; margin-top:4px;" id="arrive-price-ref"></p>
+    </div>
+
+    <div class="form-section" id="arrive-memo-section" style="display:none;">
+      <h3>メモ（任意）</h3>
+      <input type="text" id="arrive-memo" placeholder="例：B品5m含む、実質15m" style="width:100%; padding:14px; border:2px solid #e5e5ea; border-radius:10px; font-size:16px;">
+    </div>
+
+    <button class="submit-btn not-ready" id="arrive-submit-btn" onclick="submitArrive()">
+      発注を選んでください
+    </button>
+  </div>
+
+  <!-- ========== 作業完了画面（共通） ========== -->
+  <div id="screen-work-success" class="hidden">
+    <div class="success-screen">
+      <div class="success-icon">✅</div>
+      <div class="success-msg" id="work-success-msg">記録しました！</div>
+      <div class="success-detail" id="work-success-detail"></div>
+      <button class="role-btn" onclick="workSuccessBack()" style="display:inline-block; padding:16px 32px;">
+        <div class="role-name">続けて入力する</div>
+      </button>
+      <br><br>
+      <button class="back-btn" onclick="showScreen('screen-top')">トップに戻る</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===== Google Sheets API設定 =====
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzODC8cGhctCyPWr-1-pKz-GQa08RTZ7-Pat-7qefftxv9OCQyoborlhaqJW4XIXsEqMg/exec';
+
+async function gasGet() {
+  try {
+    const resp = await fetch(GAS_URL);
+    const data = await resp.json();
+    if (data.success) return data.records;
+    throw new Error(data.error);
+  } catch(e) {
+    console.warn('GAS GET failed, using localStorage:', e);
+    return null;
+  }
+}
+
+async function gasPost(action, payload) {
+  try {
+    const body = { action, ...payload };
+    const resp = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    if (!data.success) console.warn('GAS POST warning:', data.error);
+    return data;
+  } catch(e) {
+    console.warn('GAS POST failed:', e);
+    return null;
+  }
+}
+
+// Show sync status indicator
+function showSyncStatus(status) {
+  let el = document.getElementById('sync-status');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sync-status';
+    el.style.cssText = 'position:fixed;top:8px;right:8px;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;z-index:9999;transition:opacity 0.3s;';
+    document.body.appendChild(el);
+  }
+  if (status === 'syncing') {
+    el.textContent = '同期中...';
+    el.style.background = '#fff3e0';
+    el.style.color = '#ff9500';
+    el.style.opacity = '1';
+  } else if (status === 'synced') {
+    el.textContent = '同期完了';
+    el.style.background = '#e5f9e7';
+    el.style.color = '#34c759';
+    el.style.opacity = '1';
+    setTimeout(() => { el.style.opacity = '0'; }, 2000);
+  } else if (status === 'offline') {
+    el.textContent = 'オフライン';
+    el.style.background = '#ffe5e5';
+    el.style.color = '#ff3b30';
+    el.style.opacity = '1';
+  }
+}
+
+// ===== パーツマスターデータ =====
+// PARTS_MASTER[SKUGroup][colorCode] = [{ category, partName, quantity }]
+// colorCode = '*' means shared across all colors
+const PARTS_MASTER = {
+  'LBL': {
+    '*': [
+      { category: 'FB', partName: '769_74*49', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_31', quantity: 2 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'TAG_whph', quantity: 1 },
+    ],
+    'RD': [
+      { category: 'FA', partName: '709Z_74*49_RD', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'MU': [
+      { category: 'FA', partName: '709Z_74*49_MU', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '709Z_74*49_BE', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BR': [
+      { category: 'FA', partName: '709Z_74*49_BR', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '709Z_74*49_BL', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'NA': [
+      { category: 'FA', partName: '709Z_74*49_NA', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'SB': [
+      { category: 'FA', partName: '709Z_74*49_SB', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '709Z_74*49_GY', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+  },
+  'LBM': {
+    '*': [
+      { category: 'FB', partName: '769_63.5*44', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_31', quantity: 2 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'TAG_whph', quantity: 1 },
+    ],
+    'RD': [
+      { category: 'FA', partName: '709Z_63.5*44_RD', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'MU': [
+      { category: 'FA', partName: '709Z_63.5*44_MU', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '709Z_63.5*44_BE', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BR': [
+      { category: 'FA', partName: '709Z_63.5*44_BR', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '709Z_63.5*44_BL', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'NA': [
+      { category: 'FA', partName: '709Z_63.5*44_NA', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'SB': [
+      { category: 'FA', partName: '709Z_63.5*44_SB', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '709Z_63.5*44_GY', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+  },
+  'LBS': {
+    '*': [
+      { category: 'FB', partName: '769_53*38', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_29', quantity: 2 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'TAG_whph', quantity: 1 },
+    ],
+    'RD': [
+      { category: 'FA', partName: '709Z_53*38_RD', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'MU': [
+      { category: 'FA', partName: '709Z_53*38_MU', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '709Z_53*38_BE', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'BR': [
+      { category: 'FA', partName: '709Z_53*38_BR', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '709Z_53*38_BL', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'NA': [
+      { category: 'FA', partName: '709Z_53*38_NA', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'SB': [
+      { category: 'FA', partName: '709Z_53*38_SB', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '709Z_53*38_GY', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+  },
+  'LBSS': {
+    '*': [
+      { category: 'FB', partName: '769_53*28', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_27', quantity: 2 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'TAG_whph', quantity: 1 },
+    ],
+    'RD': [
+      { category: 'FA', partName: '709Z_53*28_RD', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'MU': [
+      { category: 'FA', partName: '709Z_53*28_MU', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '709Z_53*28_BE', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'BR': [
+      { category: 'FA', partName: '709Z_53*28_BR', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '709Z_53*28_BL', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'NA': [
+      { category: 'FA', partName: '709Z_53*28_NA', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'SB': [
+      { category: 'FA', partName: '709Z_53*28_SB', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '709Z_53*28_GY', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+  },
+  'LBL_NAME': {
+    '*': [
+      { category: 'FB', partName: '769_74*49', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_31', quantity: 2 },
+      { category: 'B', partName: 'TAG_blank', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+    ],
+    'RD': [
+      { category: 'FA', partName: '709Z_74*49_RD', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'MU': [
+      { category: 'FA', partName: '709Z_74*49_MU', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '709Z_74*49_BE', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BR': [
+      { category: 'FA', partName: '709Z_74*49_BR', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '709Z_74*49_BL', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'NA': [
+      { category: 'FA', partName: '709Z_74*49_NA', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'SB': [
+      { category: 'FA', partName: '709Z_74*49_SB', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '709Z_74*49_GY', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+  },
+  'LBM_NAME': {
+    '*': [
+      { category: 'FB', partName: '769_63.5*44', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_31', quantity: 2 },
+      { category: 'B', partName: 'TAG_blank', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+    ],
+    'RD': [
+      { category: 'FA', partName: '709Z_63.5*44_RD', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'MU': [
+      { category: 'FA', partName: '709Z_63.5*44_MU', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '709Z_63.5*44_BE', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BR': [
+      { category: 'FA', partName: '709Z_63.5*44_BR', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '709Z_63.5*44_BL', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'NA': [
+      { category: 'FA', partName: '709Z_63.5*44_NA', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'SB': [
+      { category: 'FA', partName: '709Z_63.5*44_SB', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '709Z_63.5*44_GY', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_LM', quantity: 1 },
+    ],
+  },
+  'LBS_NAME': {
+    '*': [
+      { category: 'FB', partName: '769_53*38', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_29', quantity: 2 },
+      { category: 'B', partName: 'TAG_blank', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+    ],
+    'RD': [
+      { category: 'FA', partName: '709Z_53*38_RD', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'MU': [
+      { category: 'FA', partName: '709Z_53*38_MU', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '709Z_53*38_BE', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'BR': [
+      { category: 'FA', partName: '709Z_53*38_BR', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '709Z_53*38_BL', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'NA': [
+      { category: 'FA', partName: '709Z_53*38_NA', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'SB': [
+      { category: 'FA', partName: '709Z_53*38_SB', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '709Z_53*38_GY', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_S', quantity: 1 },
+    ],
+  },
+  'LBSS_NAME': {
+    '*': [
+      { category: 'FB', partName: '769_53*28', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_27', quantity: 2 },
+      { category: 'B', partName: 'TAG_blank', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+    ],
+    'RD': [
+      { category: 'FA', partName: '709Z_53*28_RD', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'MU': [
+      { category: 'FA', partName: '709Z_53*28_MU', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '709Z_53*28_BE', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'BR': [
+      { category: 'FA', partName: '709Z_53*28_BR', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '709Z_53*28_BL', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'NA': [
+      { category: 'FA', partName: '709Z_53*28_NA', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'SB': [
+      { category: 'FA', partName: '709Z_53*28_SB', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '709Z_53*28_GY', quantity: 1 },
+      { category: 'FC', partName: '709Z_LBpocket_SS', quantity: 1 },
+    ],
+  },
+  'SBDL': {
+    '*': [
+      { category: 'FB', partName: '713Z_73*26.5', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_29', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_6', quantity: 1 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'dkan_30', quantity: 1 },
+    ],
+    'BK': [ { category: 'FA', partName: '11hanpu_73*26.5_BK', quantity: 1 } ],
+    'BL': [ { category: 'FA', partName: '11hanpu_73*26.5_BL', quantity: 1 } ],
+    'BR': [ { category: 'FA', partName: '11hanpu_73*26.5_BR', quantity: 1 } ],
+    'KH': [ { category: 'FA', partName: '11hanpu_73*26.5_KH', quantity: 1 } ],
+    'OR': [ { category: 'FA', partName: '11hanpu_73*26.5_OR', quantity: 1 } ],
+    'SP': [ { category: 'FA', partName: '11hanpu_73*26.5_SP', quantity: 1 } ],
+  },
+  'SBDM': {
+    '*': [
+      { category: 'FB', partName: '713Z_63*23', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_29', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_6', quantity: 1 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'dkan_30', quantity: 1 },
+    ],
+    'BK': [ { category: 'FA', partName: '11hanpu_63*23_BK', quantity: 1 } ],
+    'BL': [ { category: 'FA', partName: '11hanpu_63*23_BL', quantity: 1 } ],
+    'BR': [ { category: 'FA', partName: '11hanpu_63*23_BR', quantity: 1 } ],
+    'KH': [ { category: 'FA', partName: '11hanpu_63*23_KH', quantity: 1 } ],
+    'OR': [ { category: 'FA', partName: '11hanpu_63*23_OR', quantity: 1 } ],
+    'SP': [ { category: 'FA', partName: '11hanpu_63*23_SP', quantity: 1 } ],
+  },
+  'SBL': {
+    '*': [
+      { category: 'FB', partName: '713Z_73*31.5', quantity: 1 },
+      { category: 'H', partName: '15mmtape_21', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_M', quantity: 2 },
+      { category: 'B', partName: 'kashime_AG', quantity: 2 },
+    ],
+    'BK': [
+      { category: 'FA', partName: '80300_93*31.5_BK', quantity: 1 },
+      { category: 'H', partName: 'mixcode_GR_67', quantity: 2 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '80300_93*31.5_BL', quantity: 1 },
+      { category: 'H', partName: 'mixcode_NA_67', quantity: 2 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '80300_93*31.5_BE', quantity: 1 },
+      { category: 'H', partName: 'mixcode_BL_67', quantity: 2 },
+    ],
+    'PK': [
+      { category: 'FA', partName: '77300_93*61.5_PK', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_67', quantity: 2 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '77300_93*61.5_GY', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_67', quantity: 2 },
+    ],
+    'LA': [
+      { category: 'FA', partName: '77300_93*61.5_LA', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_67', quantity: 2 },
+    ],
+  },
+  'SBM': {
+    '*': [
+      { category: 'FB', partName: '713Z_56*24', quantity: 1 },
+      { category: 'H', partName: '15mmtape_21', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_M', quantity: 2 },
+      { category: 'B', partName: 'kashime_AG', quantity: 2 },
+    ],
+    'BK': [
+      { category: 'FA', partName: '80300_76*24_BK', quantity: 1 },
+      { category: 'H', partName: 'mixcode_GR_52', quantity: 2 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '80300_76*24_BL', quantity: 1 },
+      { category: 'H', partName: 'mixcode_NA_52', quantity: 2 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '80300_76*24_BE', quantity: 1 },
+      { category: 'H', partName: 'mixcode_BL_52', quantity: 2 },
+    ],
+    'PK': [
+      { category: 'FA', partName: '77300_76*24_PK', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_52', quantity: 2 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '77300_76*24_GY', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_52', quantity: 2 },
+    ],
+    'LA': [
+      { category: 'FA', partName: '77300_76*24_LA', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_52', quantity: 2 },
+    ],
+  },
+  'TAL': {
+    '*': [
+      { category: 'FB', partName: '713Z_83*37.5', quantity: 1 },
+      { category: 'H', partName: '15mmtape_21', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_M', quantity: 2 },
+      { category: 'B', partName: 'kashime_AG', quantity: 2 },
+    ],
+    'BK': [
+      { category: 'FA', partName: '80300_103*37.5_BK', quantity: 1 },
+      { category: 'H', partName: 'mixcode_GR_79', quantity: 2 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '80300_103*37.5_BL', quantity: 1 },
+      { category: 'H', partName: 'mixcode_NA_79', quantity: 2 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '80300_103*37.5_BE', quantity: 1 },
+      { category: 'H', partName: 'mixcode_BL_79', quantity: 2 },
+    ],
+    'PK': [
+      { category: 'FA', partName: '77300_103*37.5_PK', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_79', quantity: 2 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '77300_103*37.5_GY', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_79', quantity: 2 },
+    ],
+    'LA': [
+      { category: 'FA', partName: '77300_103*37.5_LA', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_79', quantity: 2 },
+    ],
+  },
+  'TAM': {
+    '*': [
+      { category: 'FB', partName: '713Z_63*32', quantity: 1 },
+      { category: 'H', partName: '15mmtape_21', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_M', quantity: 2 },
+      { category: 'B', partName: 'kashime_AG', quantity: 2 },
+    ],
+    'BK': [
+      { category: 'FA', partName: '80300_83*32_BK', quantity: 1 },
+      { category: 'H', partName: 'mixcode_GR_67', quantity: 2 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '80300_83*32_BL', quantity: 1 },
+      { category: 'H', partName: 'mixcode_NA_67', quantity: 2 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '80300_83*32_BE', quantity: 1 },
+      { category: 'H', partName: 'mixcode_BL_67', quantity: 2 },
+    ],
+    'PK': [
+      { category: 'FA', partName: '77300_83*32_PK', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_67', quantity: 2 },
+    ],
+    'GY': [
+      { category: 'FA', partName: '77300_83*32_GY', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_67', quantity: 2 },
+    ],
+    'LA': [
+      { category: 'FA', partName: '77300_83*32_LA', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_67', quantity: 2 },
+    ],
+  },
+  'APM': {
+    '*': [
+      { category: 'FB', partName: '713Z_72*29.5', quantity: 1 },
+      { category: 'H', partName: 'blackcode-m_61.5', quantity: 2 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_M', quantity: 2 },
+    ],
+    'ST': [ { category: 'FA', partName: '麻混ST_72*29.5', quantity: 1 } ],
+    'WH': [ { category: 'FA', partName: '80200_72*29.5_WH', quantity: 1 } ],
+  },
+  'APS': {
+    '*': [
+      { category: 'FB', partName: '713Z_48*24', quantity: 1 },
+      { category: 'H', partName: 'blackcode-s_50', quantity: 2 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_S', quantity: 2 },
+    ],
+    'BK': [ { category: 'FA', partName: '80200_56*24_BK', quantity: 1 } ],
+    'GY': [ { category: 'FA', partName: '80200_56*24_GY', quantity: 1 } ],
+    'WH': [ { category: 'FA', partName: '80200_56*24_WH', quantity: 1 } ],
+  },
+  'DO': {
+    '*': [
+      { category: 'FB', partName: '713Z_48*24', quantity: 1 },
+      { category: 'H', partName: 'blackcode-s_50', quantity: 2 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_S', quantity: 2 },
+    ],
+    'BK': [ { category: 'FA', partName: '80200_56*24_BK', quantity: 1 } ],
+    'GY': [ { category: 'FA', partName: '80200_56*24_GY', quantity: 1 } ],
+    'BE': [ { category: 'FA', partName: '80200_56*24_BE', quantity: 1 } ],
+  },
+  'CL': {
+    '*': [
+      { category: 'FB', partName: '713Z_48*24', quantity: 1 },
+      { category: 'H', partName: 'blackcode-s_50', quantity: 2 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_S', quantity: 2 },
+    ],
+    'BK': [ { category: 'FA', partName: '80200_56*24_BK', quantity: 1 } ],
+    'GY': [ { category: 'FA', partName: '80200_56*24_GY', quantity: 1 } ],
+  },
+  'KM': {
+    '*': [
+      { category: 'FB', partName: 'stripe_48*24', quantity: 1 },
+      { category: 'FB', partName: 'WH_48*24', quantity: 1 },
+      { category: 'H', partName: 'blackcode-s_50', quantity: 2 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_S', quantity: 2 },
+    ],
+    'BK': [ { category: 'FA', partName: '80200_56*24_BK', quantity: 1 } ],
+    'GY': [ { category: 'FA', partName: '80200_56*24_GY', quantity: 1 } ],
+    'WH': [ { category: 'FA', partName: '80200_56*24_WH', quantity: 1 } ],
+    'BE': [ { category: 'FA', partName: '80200_56*24_BE', quantity: 1 } ],
+    'BST': [ { category: 'FA', partName: 'BST_56*24', quantity: 1 } ],
+    'RST': [ { category: 'FA', partName: 'RST_56*24', quantity: 1 } ],
+    'GCHE': [ { category: 'FA', partName: 'GCHE_56*24', quantity: 1 } ],
+    'HAT': [ { category: 'FA', partName: 'HAT_56*24', quantity: 1 } ],
+    'DOT': [ { category: 'FA', partName: 'DOT_56*24', quantity: 1 } ],
+    'FLW': [ { category: 'FA', partName: 'FL_W_56*24', quantity: 1 } ],
+    'FLB': [ { category: 'FA', partName: 'FL_B_56*24', quantity: 1 } ],
+    'CAT': [ { category: 'FA', partName: 'CAT_56*24', quantity: 1 } ],
+    'LURE': [ { category: 'FA', partName: 'LURE_56*24', quantity: 1 } ],
+    'KABUTO_W': [ { category: 'FA', partName: 'KABUTO_W_56*24', quantity: 1 } ],
+    'KABUTO_B': [ { category: 'FA', partName: 'KABUTO_B_56*24', quantity: 1 } ],
+    'REX_BE': [ { category: 'FA', partName: 'REX_BE_56*24', quantity: 1 } ],
+    'REX_BK': [ { category: 'FA', partName: 'REX_BK_56*24', quantity: 1 } ],
+    'REX_MN': [ { category: 'FA', partName: 'REX_MN_56*24', quantity: 1 } ],
+  },
+  'HA': {
+    '*': [
+      { category: 'FB', partName: 'stripe_47*18.5', quantity: 1 },
+      { category: 'H', partName: 'blackcode-s_40', quantity: 2 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_S', quantity: 2 },
+    ],
+    'GY': [ { category: 'FA', partName: '80200_55*18.5_GY', quantity: 1 } ],
+    'BE': [ { category: 'FA', partName: '80200_55*18.5_BE', quantity: 1 } ],
+    'BK': [ { category: 'FA', partName: '80200_55*18.5_BK', quantity: 1 } ],
+    'WH': [ { category: 'FA', partName: '80200_55*18.5_WH', quantity: 1 } ],
+  },
+  'CUP': {
+    '*': [
+      { category: 'FB', partName: 'stripe_37*19.5', quantity: 1 },
+      { category: 'FB', partName: 'WH_37*19.5', quantity: 1 },
+      { category: 'H', partName: '15mmtape_5', quantity: 1 },
+      { category: 'H', partName: 'gom_36', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_bane', quantity: 1 },
+    ],
+    'GY': [ { category: 'FA', partName: '80200_45*19.5_GY', quantity: 1 } ],
+    'BE': [ { category: 'FA', partName: '80200_45*19.5_BE', quantity: 1 } ],
+    'BK': [ { category: 'FA', partName: '80200_45*19.5_BK', quantity: 1 } ],
+    'WH': [ { category: 'FA', partName: '80200_45*19.5_WH', quantity: 1 } ],
+    'BST': [ { category: 'FA', partName: 'BST_45*19.5', quantity: 1 } ],
+    'RST': [ { category: 'FA', partName: 'RST_45*19.5', quantity: 1 } ],
+    'DOT': [ { category: 'FA', partName: 'DOT_45*19.5', quantity: 1 } ],
+    'FLW': [ { category: 'FA', partName: 'FL_W_45*19.5', quantity: 1 } ],
+    'FLB': [ { category: 'FA', partName: 'FL_B_45*19.5', quantity: 1 } ],
+    'CAT': [ { category: 'FA', partName: 'CAT_45*19.5', quantity: 1 } ],
+    'LURE': [ { category: 'FA', partName: 'LURE_45*19.5', quantity: 1 } ],
+  },
+  'MASK': {
+    '*': [
+      { category: 'B', partName: 'snap_BK', quantity: 2 },
+      { category: 'B', partName: 'snap_deko', quantity: 1 },
+      { category: 'B', partName: 'snap_boko', quantity: 1 },
+    ],
+    'N': [ { category: 'FA', partName: '11264_31*17', quantity: 1 } ],
+    'W': [ { category: 'FA', partName: '11264_31*21', quantity: 1 } ],
+  },
+  'SNAP': {
+    '*': [
+      { category: 'FB', partName: '713Z_93*42', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_5.5', quantity: 2 },
+      { category: 'H', partName: '30mmbeltheat_31', quantity: 1 },
+      { category: 'H', partName: 'flatcode_BK_185', quantity: 2 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'snap_BK', quantity: 4 },
+      { category: 'B', partName: 'snap_deko', quantity: 2 },
+      { category: 'B', partName: 'snap_boko', quantity: 2 },
+    ],
+    'KH': [ { category: 'FA', partName: '41033_146*42_KH', quantity: 1 } ],
+    'NA': [ { category: 'FA', partName: '41033_146*42_NA', quantity: 1 } ],
+  },
+  'PNAP': {
+    '*': [
+      { category: 'FB', partName: '713Z_93*42', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_5.5', quantity: 2 },
+      { category: 'H', partName: '30mmbeltheat_31', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_185', quantity: 2 },
+      { category: 'H', partName: '15mm_ribbon_5', quantity: 1 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'snap_BK', quantity: 2 },
+      { category: 'B', partName: 'snap_WH', quantity: 2 },
+      { category: 'B', partName: 'snap_deko', quantity: 2 },
+      { category: 'B', partName: 'snap_boko', quantity: 2 },
+      { category: 'B', partName: 'karabina', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '701_102*42_BL', quantity: 1 },
+      { category: 'FC', partName: '709Z_PNAPpocket_BK', quantity: 1 },
+      { category: 'FC', partName: '701_PNAPpocket_BL', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '701_102*42_BE', quantity: 1 },
+      { category: 'FC', partName: '709Z_PNAPpocket_BK', quantity: 1 },
+      { category: 'FC', partName: '701_PNAPpocket_BE', quantity: 1 },
+    ],
+    'OR': [
+      { category: 'FA', partName: '701_102*42_OR', quantity: 1 },
+      { category: 'FC', partName: '709Z_PNAPpocket_BK', quantity: 1 },
+      { category: 'FC', partName: '701_PNAPpocket_OR', quantity: 1 },
+    ],
+    'PK': [
+      { category: 'FA', partName: '701_102*42_PK', quantity: 1 },
+      { category: 'FC', partName: '709Z_PNAPpocket_BK', quantity: 1 },
+      { category: 'FC', partName: '701_PNAPpocket_PK', quantity: 1 },
+    ],
+  },
+  'IBL': {
+    '*': [
+      { category: 'FB', partName: '769_74*49', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_31', quantity: 2 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'dkan_30', quantity: 1 },
+    ],
+    'KI': [
+      { category: 'FA', partName: '11264_74*49', quantity: 1 },
+      { category: 'FC', partName: '769_IBpocket_LM', quantity: 1 },
+    ],
+  },
+  'IBM': {
+    '*': [
+      { category: 'FB', partName: '769_63.5*44', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_31', quantity: 2 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'dkan_30', quantity: 1 },
+    ],
+    'KI': [
+      { category: 'FA', partName: '11264_63.5*44', quantity: 1 },
+      { category: 'FC', partName: '769_IBpocket_LM', quantity: 1 },
+    ],
+  },
+  'IBSS': {
+    '*': [
+      { category: 'FB', partName: '769_53*28', quantity: 1 },
+      { category: 'H', partName: '30mmbelt_27', quantity: 2 },
+      { category: 'B', partName: 'TAG_ktkt01', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'dkan_30', quantity: 1 },
+    ],
+    'KI': [
+      { category: 'FA', partName: '11264_53*28', quantity: 1 },
+      { category: 'FC', partName: '769_IBpocket_SS', quantity: 1 },
+    ],
+  },
+  'TP': {
+    '*': [
+      { category: 'H', partName: '15mm_ribbon_5', quantity: 1 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'TAG_ktkt02', quantity: 1 },
+      { category: 'B', partName: 'snap_BK', quantity: 2 },
+      { category: 'B', partName: 'snap_deko', quantity: 1 },
+      { category: 'B', partName: 'snap_boko', quantity: 1 },
+    ],
+    'RD': [
+      { category: 'FA', partName: '709Z_RD_a', quantity: 1 },
+      { category: 'FA', partName: '709Z_RD_b', quantity: 1 },
+    ],
+    'MU': [
+      { category: 'FA', partName: '709Z_MU_a', quantity: 1 },
+      { category: 'FA', partName: '709Z_MU_b', quantity: 1 },
+    ],
+    'BE': [
+      { category: 'FA', partName: '709Z_BE_a', quantity: 1 },
+      { category: 'FA', partName: '709Z_BE_b', quantity: 1 },
+    ],
+    'BR': [
+      { category: 'FA', partName: '709Z_BR_a', quantity: 1 },
+      { category: 'FA', partName: '709Z_BR_b', quantity: 1 },
+    ],
+    'BL': [
+      { category: 'FA', partName: '709Z_BL_a', quantity: 1 },
+      { category: 'FA', partName: '709Z_BL_b', quantity: 1 },
+    ],
+    'NA': [
+      { category: 'FA', partName: '709Z_NA_a', quantity: 1 },
+      { category: 'FA', partName: '709Z_NA_b', quantity: 1 },
+    ],
+  },
+  'OMM': {
+    '*': [
+      { category: 'FB', partName: '713Z_63*32', quantity: 1 },
+      { category: 'H', partName: '15mmtape_21', quantity: 1 },
+      { category: 'H', partName: 'flatcode_WH_67', quantity: 2 },
+      { category: 'B', partName: 'TAG_onamae', quantity: 1 },
+      { category: 'B', partName: 'end_M', quantity: 2 },
+      { category: 'B', partName: 'kashime_AG', quantity: 2 },
+    ],
+    'BK': [ { category: 'FA', partName: '80300_83*32_BK', quantity: 1 } ],
+    'GY': [ { category: 'FA', partName: '77300_83*32_GY', quantity: 1 } ],
+  },
+  'FBM': {
+    '*': [
+      { category: 'FB', partName: 'da18_63.5*44', quantity: 1 },
+      { category: 'FC', partName: 'da18_FBMpocket', quantity: 1 },
+    ],
+    'AP': [ { category: 'FA', partName: '210_63.5*44_AP', quantity: 1 } ],
+    'BL': [ { category: 'FA', partName: '210_63.5*44_BL', quantity: 1 } ],
+    'LE': [ { category: 'FA', partName: '210_63.5*44_LE', quantity: 1 } ],
+  },
+  'FBOL': {
+    '*': [
+      { category: 'FB', partName: '769fb_74*49', quantity: 1 },
+    ],
+  },
+};
+
+// SKUGroupごとのカラーリスト（マスターデータから導出）
+const SKU_COLORS = {};
+(function buildSKUColors() {
+  for (const [sku, colorMap] of Object.entries(PARTS_MASTER)) {
+    SKU_COLORS[sku] = Object.keys(colorMap).filter(c => c !== '*').sort((a, b) => a.localeCompare(b, 'ja'));
+  }
+})();
+
+// SKU名の日本語マッピング
+const SKU_NAMES = {
+  'APM': 'エプロンM', 'APS': 'エプロンS',
+  'CL': 'カトラリー巾着', 'CUP': 'コップ袋', 'DO': 'お道具袋',
+  'FBM': 'フリルバッグM', 'FBOL': 'フリルバッグOL',
+  'HA': '歯磨き巾着', 'KM': '給食袋',
+  'IBL': 'イラストバッグL', 'IBM': 'イラストバッグM', 'IBSS': 'イラストバッグSS',
+  'LBL': 'レッスンバッグL', 'LBM': 'レッスンバッグM', 'LBS': 'レッスンバッグS', 'LBSS': 'レッスンバッグSS',
+  'LBL_NAME': 'レッスンバッグL(名入)', 'LBM_NAME': 'レッスンバッグM(名入)', 'LBS_NAME': 'レッスンバッグS(名入)', 'LBSS_NAME': 'レッスンバッグSS(名入)',
+  'MASK': 'マスク', 'OMM': 'おむつ入れ',
+  'PNAP': 'プチナップ',
+  'SBL': 'シューズバッグL', 'SBM': 'シューズバッグM',
+  'SBDL': 'DカンシューズバッグL', 'SBDM': 'DカンシューズバッグM',
+  'SNAP': 'ナップサック',
+  'TAL': '体操着袋L', 'TAM': '体操着袋M',
+  'TP': 'ティッシュポケット'
+};
+
+// カラーコードの日本語マッピング
+const COLOR_NAMES = {
+  'RD': 'レッド', 'MU': 'マスタード', 'BE': 'ベージュ', 'BR': 'カーキブラウン',
+  'BL': 'ブルー', 'NA': 'ネイビー', 'SB': 'サンドベージュ', 'GY': 'チャコールグレー',
+  'BK': 'ブラック', 'WH': 'ホワイト', 'SP': 'ストライプ',
+  'OR': 'サーモンオレンジ', 'PK': 'ピンク', 'LV': 'ラベンダー', 'MT': 'ミント',
+  'BST': 'ブルーストライプ', 'RST': 'レッドストライプ',
+  'GCHE': 'グリーンチェック', 'HAT': 'ハット柄', 'DOT': 'ドット',
+  'FLB': '花柄ブルー', 'FLW': '花柄ホワイト', 'FL_W': '花柄W', 'FL_B': '花柄B',
+  'CAT': 'ネコ柄', 'LURE': 'ルアー柄',
+  'KABUTO_W': 'カブトW', 'KABUTO_B': 'カブトB',
+  'REX_BE': 'REXベージュ', 'REX_BK': 'REXブラック', 'REX_MN': 'REXミント',
+  'LA': 'ラベンダー', 'KH': 'カーキ', 'ST': 'ストライプ',
+  'AP': 'メローアプリコット', 'LE': 'レモンクリーム',
+  'KI': '生成', 'N': 'ノーマル', 'W': 'ワイド',
+};
+function colorLabel(code) { return COLOR_NAMES[code] ? `${code} ${COLOR_NAMES[code]}` : code; }
+
+// 裁断用の全SKUGroupリスト（アルファベット順）
+const SAIDAN_SKUS = [
+  'APM','APS','CL','CUP','DO','FBM','FBOL',
+  'HA','IBL','IBM','IBSS','KM',
+  'LBL','LBL_NAME','LBM','LBM_NAME','LBS','LBS_NAME','LBSS','LBSS_NAME',
+  'MASK','OMM','PNAP',
+  'SBL','SBM','SBDL','SBDM','SNAP',
+  'TAL','TAM','TP'
+].sort((a, b) => a.localeCompare(b, 'ja'));
+
+// 裁断で使うカテゴリ（B は裁断対象外）
+const SAIDAN_CATEGORIES = [
+  { code: 'FA', label: '表地' },
+  { code: 'FB', label: '裏地' },
+  { code: 'FC', label: 'ポケット' },
+  { code: 'H',  label: 'ひも・テープ' },
+];
+
+// パーツの全リストを取得する関数（共通 + 個別カラー分をマージ）
+function getPartsForSKUColor(skuGroup, colorCode) {
+  const master = PARTS_MASTER[skuGroup];
+  if (!master) return [];
+  const shared = master['*'] || [];
+  const individual = master[colorCode] || [];
+  return [...shared, ...individual];
+}
+
+// 裁断用：カテゴリでフィルタしたパーツを取得
+function getCuttingParts(skuGroup, colorCode, categoryCode) {
+  const all = getPartsForSKUColor(skuGroup, colorCode);
+  return all.filter(p => p.category === categoryCode);
+}
+
+// ===== 材料マスタ（マスターデータベース） =====
+const MATERIAL_CATEGORIES = [
+  {
+    name: '生地',
+    items: [
+      '709Z RD レッド（LB表）',
+      '709Z MU マスタード（LB表）',
+      '709Z BE キャメルベージュ（LB表）',
+      '709Z BR ブラウン（LB表）',
+      '709Z BL ブルー（LB表）',
+      '709Z NA ダークネイビー（LB表）',
+      '709Z BK ブラック（LBポケット）',
+      '709Z SB サンドベージュ（LB表）',
+      '709Z GY チャコールグレー（LB表）',
+      '769 BK ブラック（裏地LB/IB）',
+      '11264 生成り（IB/MASK表地）',
+      '11号帆布 BK ブラック（SBD表）',
+      '11号帆布 BL アースブルー（SBD表）',
+      '11号帆布 BR モカ（SBD表）',
+      '11号帆布 KH カーキ（SBD表）',
+      '11号帆布 OR サーモンオレンジ（SBD表）',
+      '11号帆布 SP スモークピンク（SBD表）',
+      '80300 BK ブラック（SB/TA表）',
+      '80300 BL エーゲブルー（SB/TA表）',
+      '80300 BE ベージュ（SB/TA表）',
+      '77300 PK ピンク（SB/TA表）',
+      '77300 GY グレー（SB/TA表）',
+      '77300 LA ラベンダー（SB/TA表）',
+      '41033 KH カーキ（SNAP表）',
+      '41033 NA ネイビー（SNAP表）',
+      '701 BL サックスブルー（PNAP表）',
+      '701 BE サンドベージュ（PNAP表）',
+      '701 OR サーモンピンク（PNAP表）',
+      '701 PK ピンク（PNAP表）',
+      '80200 GY グレー（APS/DO/HA/CUP表）',
+      '80200 BE ベージュ（APS/DO/HA/CUP表）',
+      '80200 BK ブラック（APS/DO/HA/CUP表）',
+      '80200 WH オフホワイト（APS/DO/HA/CUP表）',
+      '713Z BK ブラック（撥水裏地）',
+      '210 no.17 レモンイエロー（FB表）',
+      '210 no.19 ピーチオレンジ（FB表）',
+      '210 no.23 サックス（FB表）',
+      'DA-18 R-1（フリルバッグ裏地）',
+      '麻混ST（エプロン表地）',
+      'SO-5350 no.9 ストライプ（KM/CUP/HA裏地）',
+    ]
+  },
+  {
+    name: 'パーツ',
+    items: [
+      '15mmテープ（15mmtape_5000）',
+      '15mmリボン（15mm_ribbon）',
+      '20mmベルト（20mmbelt_5000）',
+      '30mmベルト（30mmbelt_5000）',
+      'ゴム（gom_250）',
+      'フラットコード ブラック（flatcode_BK_5000）',
+      'フラットコード ホワイト（flatcode_WH_5000）',
+      'ブラックコード L（blackcode-L_5000）',
+      'ブラックコード M（blackcode-m_5000）',
+      'ブラックコード S（blackcode-s_5000）',
+      'ミックスコード グリーン（mixcode_GR_5000）',
+      'ミックスコード ネイビー（mixcode_NA_5000）',
+      'ミックスコード ブルー（mixcode_BL_5000）',
+    ]
+  },
+  {
+    name: 'その他',
+    items: [
+      'Dカン 20mm（dkan_20）',
+      'Dカン 30mm（dkan_30）',
+      'KITOKITOタグ01（TAG_ktkt01）',
+      'KITOKITOタグ02（TAG_ktkt02）',
+      'お名前タグ（TAG_onamae）',
+      'カシメ AG（kashime_AG）',
+      'カシメ SV（kashime_SV）',
+      'カラビナ（karabina）',
+      'スナップボタン 白（snap_WH）',
+      'スナップボタン 黒（snap_BK）',
+      'スナップ凸（snap_deko）',
+      'スナップ凹（snap_boko）',
+      'ナスカン（nasukan）',
+      'ブランクタグ（TAG_blank）',
+      'ループエンド L（end_L）',
+      'ループエンド M（end_M）',
+      'ループエンド S（end_S）',
+      'ループエンド バネ（end_bane）',
+      '丸カンファスナー 40（marukan_fastener_40）',
+      '丸カンファスナー 45（marukan_fastener_45）',
+      '丸カンファスナー 50（marukan_fastener_50）',
+      '文字入りタグ（TAG_whph）',
+      '角カン 30mm（belt_30）',
+    ]
+  }
+];
+
+// カテゴリ別の単位
+const MATERIAL_UNITS = {
+  '生地': 'm',
+  'パーツ': '巻/袋',
+  'その他': '個/袋'
+};
+
+// ===== データ =====
+const STAFF_NAMES = ['郁子', '中務', '山中', '水谷', '西本', '平瀬', '川畑', '武原', '林田', '木原'];
+
+// 持ち出し・納品用の商品リスト（グループ表示）
+const PRODUCTS = [
+  { code: 'AP', name: 'エプロン巾着', sizes: ['APM', 'APS'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/a776c3183ea114cac14b30d7fcac1c6b.jpg',
+    colors: ['ST ストライプ', 'WH ホワイト', 'BK ブラック', 'GY グレー'],
+    parts: ['表地 ×1', '裏地（撥水黒） ×1', 'お名前タグ ×1', 'ループエンド ×2', 'ひも ×2'] },
+  { code: 'CL', name: 'カトラリー巾着', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/7603552ba770fdf5627f31201d521b6e.jpg',
+    colors: ['BK ブラック', 'GY グレー'],
+    parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'ループエンド ×2', 'ひも ×2'] },
+  { code: 'CUP', name: 'コップ袋', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/42482672fce2d4e8527a5a733f6a7379.jpg',
+    colors: ['BK ブラック', 'GY グレー', 'BE ベージュ', 'WH ホワイト', 'BST ボーイストライプ', 'RST レッドストライプ', 'DOT ドット', 'FLW フラワー白', 'FLB フラワー黒', 'CAT ネコ', 'LURE ルアー'],
+    parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'テープ ×1', 'ゴム ×1', 'コードエンド ×1'] },
+  { code: 'DO', name: 'お道具袋', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/90c8d3b671ef640136df9776f6979b67.jpg',
+    colors: ['BK ブラック', 'GY グレー', 'BE ベージュ'],
+    parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'ループエンド ×2', 'ひも ×2'] },
+  { code: 'HA', name: '歯磨き巾着', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/42482672fce2d4e8527a5a733f6a7379.jpg',
+    colors: ['BK ブラック', 'GY グレー', 'BE ベージュ', 'WH ホワイト'],
+    parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'ループエンド ×2', 'ひも ×2'] },
+  { code: 'KM', name: '給食袋', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/784c5dd594129e6e0bd25436ee5954fd.jpg',
+    colors: ['BK ブラック', 'GY グレー', 'BE ベージュ', 'WH ホワイト', 'BST ボーイストライプ', 'RST レッドストライプ', 'GCHE グレンチェック', 'HAT ハット', 'DOT ドット', 'FLW フラワー白', 'FLB フラワー黒', 'CAT ネコ', 'LURE ルアー', 'KABUTO_W', 'KABUTO_B', 'REX_BE 恐竜ベージュ', 'REX_BK 恐竜黒', 'REX_MN 恐竜モノクロ'],
+    parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'ループエンド ×2', 'ひも ×2'] },
+  { code: 'LB', name: 'レッスンバッグ', sizes: ['LBL', 'LBM', 'LBS', 'LBSS'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/6f164ee6e5603969ce42dacb198813a6.jpg',
+    colors: ['RD レッド', 'MU マスタード', 'BE ベージュ', 'BR カーキブラウン', 'BL ブルー', 'NA ネイビー', 'SB サンドベージュ', 'GY チャコールグレー'],
+    parts: ['表地 ×1', '裏地 ×1', 'ポケット ×1', 'お名前タグ ×1', '持ち手ベルト ×2', 'KITOKITOタグ ×1'] },
+  { code: 'SB', name: 'シューズバッグ', sizes: ['SBL', 'SBM'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/840f1349488708b0c41e71d08342258b.jpg',
+    colors: ['BK ブラック', 'BL ブルー', 'BE ベージュ', 'PK ピンク', 'GY グレー', 'LA ラベンダー'],
+    parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'ループエンド ×2', 'テープ ×1', 'ひも ×2'] },
+  { code: 'SBD', name: 'Dカンシューズバッグ', sizes: ['SBDL', 'SBDM'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/d64f4c82a427f1719c5d5a08b51c8665.jpg',
+    colors: ['BK ブラック', 'BL ブルー', 'BR ブラウン', 'KH カーキ', 'OR サーモンオレンジ', 'SP スモークピンク'],
+    parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', '持ち手ベルト ×1', 'Dカンベルト ×1'] },
+  { code: 'TA', name: '体操着袋', sizes: ['TAL', 'TAM'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/5cf091d248a20ad46f03d6bbeee04f70.jpg',
+    colors: ['BK ブラック', 'BL ブルー', 'BE ベージュ', 'PK ピンク', 'GY グレー', 'LA ラベンダー'],
+    parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'ループエンド ×2', 'テープ ×1', 'ひも ×2'] },
+  { code: 'SNAP', name: 'ナップサック', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/679c9390395bb757711385ded85e6842.jpg',
+    colors: ['KH カーキ', 'NA ネイビー'],
+    parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'ひも ×2', 'ベルト ×3'] },
+  { code: 'PNAP', name: 'プチナップサック', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/679c9390395bb757711385ded85e6842.jpg',
+    colors: ['BL ブルー', 'BE ベージュ', 'OR サーモンオレンジ', 'PK ピンク'],
+    parts: ['表地 ×1', '裏地 ×1', 'ポケット ×2', 'お名前タグ ×1', 'ひも ×2', 'ベルト ×3', 'リボン ×1'] },
+  { code: 'TP', name: 'ティッシュポケット', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/7d160f0c5c5b6f92994627eb56a32f34.jpg',
+    colors: ['RD レッド', 'MU マスタード', 'BE ベージュ', 'BR カーキブラウン', 'BL ブルー', 'NA ネイビー'],
+    parts: ['表地 ×2', 'リボン ×1', 'スナップボタン ×2'] },
+  { code: 'FB', name: 'フリルバッグ', sizes: ['FBM', 'FBOL'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/3906b6e6b1c21bca777b164683a42a4b.jpg',
+    colors: ['AP メローアプリコット', 'BL ラムネブルー', 'LE レモンクリーム'],
+    parts: ['表地 ×1', '裏地 ×1', 'ポケット ×1', '持ち手 ×2', 'ひも ×4', 'タグ ×1', 'お名前タグ ×1'] },
+  { code: 'OMM', name: 'おむつ入れ', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/ef5a9ce0af40cf64bcd1453844762aa4.jpg',
+    colors: ['BK ブラック', 'GY グレー'],
+    parts: ['表地 ×1', '裏地 ×1', 'ループエンド ×2', 'テープ ×1', 'ひも ×2'] },
+  { code: 'IB', name: 'イラストバッグ', sizes: ['IBL', 'IBM', 'IBSS'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/ef5a9ce0af40cf64bcd1453844762aa4.jpg',
+    colors: ['KI 生成'],
+    parts: ['表地 ×1', '裏地 ×1', 'ポケット ×1', 'お名前タグ ×1', '持ち手ベルト ×2'] },
+  { code: 'MASK', name: 'マスクカバー', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/ef5a9ce0af40cf64bcd1453844762aa4.jpg',
+    colors: ['N ノーマル', 'W ワイド'],
+    parts: ['表地 ×1', 'スナップボタン ×2'] },
+];
+
+// プリント・入庫用のフラット商品リスト（持ち出し・納品と同じPRODUCTSを使う）
+
+// ===== 状態 =====
+let state = {
+  selectedName: '',
+  selectedProduct: null,
+  selectedColor: '',
+  quantity: 5,
+  checkedParts: new Set(),
+  records: []
+};
+
+// ===== 画面制御 =====
+function showScreen(id) {
+  document.querySelectorAll('.container > div').forEach(d => d.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+
+function showDashboard(role) {
+  const map = { megu: 'screen-dash-megu', mom: 'screen-dash-mom', yamada: 'screen-dash-yamada' };
+  showScreen(map[role]);
+}
+
+// ===== 初期化 =====
+function init() {
+  // まずlocalStorageから復元（高速表示）
+  const saved = localStorage.getItem('kitokito_records');
+  if (saved) {
+    try { state.records = JSON.parse(saved); } catch(e) { state.records = []; }
+  }
+
+  // バックグラウンドでGASから最新データを取得
+  syncFromGAS();
+
+  // 今日の日付
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日`;
+  document.getElementById('today-date').textContent = dateStr;
+
+  // 名前ボタン生成
+  const nameGrid = document.getElementById('name-buttons');
+  STAFF_NAMES.forEach(name => {
+    const btn = document.createElement('button');
+    btn.className = 'name-btn';
+    btn.textContent = name;
+    btn.onclick = () => selectName(name);
+    nameGrid.appendChild(btn);
+  });
+
+  // 商品グリッド生成
+  const grid = document.getElementById('product-grid');
+  PRODUCTS.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.onclick = () => selectProduct(p);
+    card.innerHTML = `<img src="${p.img}" alt="${p.name}" loading="lazy"><div class="label">${p.code}<br>${p.name}</div>`;
+    grid.appendChild(card);
+  });
+}
+
+async function syncFromGAS() {
+  showSyncStatus('syncing');
+  const records = await gasGet();
+  if (records) {
+    // _rowNum を除去してからlocalStorageに保存
+    state.records = records.map(r => {
+      const clean = {...r};
+      delete clean._rowNum;
+      return clean;
+    });
+    localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+    showSyncStatus('synced');
+    // 現在表示中のダッシュボードを更新
+    const activeScreen = document.querySelector('.container > div:not(.hidden)');
+    if (activeScreen) {
+      const id = activeScreen.id;
+      if (id === 'screen-dash-megu') refreshMeguDash();
+      if (id === 'screen-dash-mom') refreshMomDash();
+      if (id === 'screen-dash-yamada') refreshYamadaDash();
+    }
+  } else {
+    showSyncStatus('offline');
+  }
+}
+
+function selectName(name) {
+  state.selectedName = name;
+  document.querySelectorAll('.name-btn').forEach(b => b.classList.toggle('selected', b.textContent === name));
+  document.getElementById('greeting').textContent = `${name}さん、お疲れさまです！`;
+  setTimeout(() => showScreen('screen-select-product'), 300);
+}
+
+function selectProduct(product) {
+  state.selectedProduct = product;
+  state.selectedColor = '';
+  state.quantity = 5;
+  state.checkedParts = new Set();
+
+  document.getElementById('selected-product-name').textContent = `${product.code} ${product.name}`;
+  document.getElementById('qty-input').value = state.quantity;
+
+  // カラーボタン
+  const colorGrid = document.getElementById('color-buttons');
+  colorGrid.innerHTML = '';
+  product.colors.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'color-btn';
+    btn.textContent = c;
+    btn.onclick = () => selectColor(c, btn);
+    colorGrid.appendChild(btn);
+  });
+
+  // パーツリスト
+  const partsList = document.getElementById('parts-list');
+  partsList.innerHTML = '';
+  product.parts.forEach((part, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<div class="check-box" onclick="togglePart(this, ${i})"></div><span>${part}</span>`;
+    partsList.appendChild(li);
+  });
+
+  updateSubmitBtn();
+  showScreen('screen-input');
+}
+
+function selectColor(color, btn) {
+  state.selectedColor = color;
+  document.querySelectorAll('#color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  updateSubmitBtn();
+}
+
+function changeQty(delta) {
+  state.quantity = Math.max(1, state.quantity + delta);
+  document.getElementById('qty-input').value = state.quantity;
+}
+function syncQtyFromInput(type) {
+  if (type === 'mochidashi') {
+    state.quantity = Math.max(1, parseInt(document.getElementById('qty-input').value) || 1);
+  } else if (type === 'nouhin') {
+    nouhinState.quantity = Math.max(1, parseInt(document.getElementById('nouhin-qty-input').value) || 1);
+  }
+}
+
+function togglePart(el, idx) {
+  if (state.checkedParts.has(idx)) {
+    state.checkedParts.delete(idx);
+    el.classList.remove('checked');
+  } else {
+    state.checkedParts.add(idx);
+    el.classList.add('checked');
+  }
+  updateSubmitBtn();
+}
+
+function updateSubmitBtn() {
+  const btn = document.getElementById('submit-btn');
+  const allChecked = state.selectedProduct && state.checkedParts.size === state.selectedProduct.parts.length;
+  if (!state.selectedColor) {
+    btn.textContent = 'カラーを選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else if (!allChecked) {
+    btn.textContent = 'パーツを全て確認してください';
+    btn.className = 'submit-btn not-ready';
+  } else {
+    btn.textContent = `送信する ✅ ${state.selectedProduct.code} ${state.selectedColor} ×${state.quantity}`;
+    btn.className = 'submit-btn ready';
+  }
+}
+
+function submitForm() {
+  if (!state.selectedColor || !state.selectedProduct) return;
+  if (state.checkedParts.size !== state.selectedProduct.parts.length) return;
+
+  const record = {
+    date: new Date().toISOString(),
+    name: state.selectedName,
+    product: state.selectedProduct.code,
+    productName: state.selectedProduct.name,
+    color: state.selectedColor,
+    quantity: state.quantity,
+    type: '持ち出し'
+  };
+  state.records.push(record);
+
+  // ローカルストレージに保存
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  document.getElementById('success-detail').textContent =
+    `${state.selectedName}さん / ${state.selectedProduct.name} / ${state.selectedColor} / ${state.quantity}枚`;
+  showScreen('screen-success');
+}
+
+// ===== 納品フロー =====
+let nouhinState = { name: '', product: null, color: '', quantity: 5, checks: new Set() };
+const NOUHIN_CHECKS = ['数量あってる', '仕上がりキレイ', '糸くず取った'];
+
+function startNouhin() {
+  // 名前ボタン生成
+  const grid = document.getElementById('nouhin-name-buttons');
+  grid.innerHTML = '';
+  STAFF_NAMES.forEach(name => {
+    const btn = document.createElement('button');
+    btn.className = 'name-btn';
+    btn.textContent = name;
+    btn.onclick = () => selectNouhinName(name);
+    grid.appendChild(btn);
+  });
+  showScreen('screen-nouhin-select-name');
+}
+
+function selectNouhinName(name) {
+  nouhinState.name = name;
+  document.querySelectorAll('#nouhin-name-buttons .name-btn').forEach(b => b.classList.toggle('selected', b.textContent === name));
+  document.getElementById('nouhin-greeting').textContent = `${name}さん、お疲れさまです！`;
+  // 商品グリッド生成
+  const grid = document.getElementById('nouhin-product-grid');
+  grid.innerHTML = '';
+  PRODUCTS.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.onclick = () => selectNouhinProduct(p);
+    card.innerHTML = `<img src="${p.img}" alt="${p.name}" loading="lazy"><div class="label">${p.code}<br>${p.name}</div>`;
+    grid.appendChild(card);
+  });
+  setTimeout(() => showScreen('screen-nouhin-select-product'), 300);
+}
+
+function selectNouhinProduct(product) {
+  nouhinState.product = product;
+  nouhinState.color = '';
+  nouhinState.quantity = 5;
+  nouhinState.checks = new Set();
+
+  document.getElementById('nouhin-product-name').textContent = `${product.code} ${product.name}`;
+  document.getElementById('nouhin-qty-input').value = nouhinState.quantity;
+
+  // カラーボタン
+  const colorGrid = document.getElementById('nouhin-color-buttons');
+  colorGrid.innerHTML = '';
+  product.colors.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'color-btn';
+    btn.textContent = c;
+    btn.onclick = () => {
+      nouhinState.color = c;
+      document.querySelectorAll('#nouhin-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      updateNouhinBtn();
+    };
+    colorGrid.appendChild(btn);
+  });
+
+  // チェックリスト
+  const list = document.getElementById('nouhin-check-list');
+  list.innerHTML = '';
+  NOUHIN_CHECKS.forEach((item, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<div class="check-box" onclick="toggleNouhinCheck(this, ${i})"></div><span>${item}</span>`;
+    list.appendChild(li);
+  });
+
+  updateNouhinBtn();
+  showScreen('screen-nouhin-input');
+}
+
+function changeNouhinQty(delta) {
+  nouhinState.quantity = Math.max(1, nouhinState.quantity + delta);
+  document.getElementById('nouhin-qty-input').value = nouhinState.quantity;
+}
+
+function toggleNouhinCheck(el, idx) {
+  if (nouhinState.checks.has(idx)) { nouhinState.checks.delete(idx); el.classList.remove('checked'); }
+  else { nouhinState.checks.add(idx); el.classList.add('checked'); }
+  updateNouhinBtn();
+}
+
+function updateNouhinBtn() {
+  const btn = document.getElementById('nouhin-submit-btn');
+  const allChecked = nouhinState.checks.size === NOUHIN_CHECKS.length;
+  if (!nouhinState.color) {
+    btn.textContent = 'カラーを選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else if (!allChecked) {
+    btn.textContent = '確認項目をすべてチェックしてください';
+    btn.className = 'submit-btn not-ready';
+  } else {
+    btn.textContent = `納品を記録する ✅ ${nouhinState.product.code} ${nouhinState.color} ×${nouhinState.quantity}`;
+    btn.className = 'submit-btn ready';
+  }
+}
+
+function submitNouhin() {
+  if (!nouhinState.color || !nouhinState.product) return;
+  if (nouhinState.checks.size !== NOUHIN_CHECKS.length) return;
+
+  const record = {
+    date: new Date().toISOString(),
+    name: nouhinState.name,
+    product: nouhinState.product.code,
+    productName: nouhinState.product.name,
+    color: nouhinState.color,
+    quantity: nouhinState.quantity,
+    type: '納品'
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  document.getElementById('nouhin-success-detail').textContent =
+    `${nouhinState.name}さん / ${nouhinState.product.name} / ${nouhinState.color} / ${nouhinState.quantity}枚`;
+  showScreen('screen-nouhin-success');
+}
+
+// ===== 裁断・プリント・入庫 共通フロー =====
+let workState = { saidan: {}, print: {}, nyuko: {} };
+let workSuccessFrom = '';
+
+function initWorkState(type) {
+  workState[type] = { product: null, color: '', part: '', partName: '', partCategory: '', quantity: 10 };
+}
+
+function startWork(type) {
+  initWorkState(type);
+
+  if (type === 'saidan') {
+    // 裁断：SKUGroupをアルファベット順でボタン表示
+    const grid = document.getElementById('saidan-product-buttons');
+    grid.innerHTML = '';
+    SAIDAN_SKUS.forEach(sku => {
+      const btn = document.createElement('button');
+      btn.className = 'color-btn';
+      btn.textContent = sku;
+      btn.onclick = () => selectSaidanProduct(sku, btn);
+      grid.appendChild(btn);
+    });
+    // セクション非表示リセット
+    document.getElementById('saidan-color-section').style.display = 'none';
+    document.getElementById('saidan-category-section').style.display = 'none';
+    document.getElementById('saidan-part-section').style.display = 'none';
+    document.getElementById('saidan-qty-input').value = '10';
+    updateWorkBtn('saidan');
+    showScreen('screen-saidan');
+  } else if (type === 'nyuko') {
+    // 入庫：検品済みリストベース
+    startNyuko();
+  } else {
+    // プリント：従来通りPRODUCTSから
+    const grid = document.getElementById(`${type}-product-buttons`);
+    grid.innerHTML = '';
+    PRODUCTS.forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = 'color-btn';
+      btn.textContent = p.code;
+      btn.onclick = () => selectWorkProduct(type, p, btn);
+      grid.appendChild(btn);
+    });
+    // カラーボタンクリア
+    const colorGrid = document.getElementById(`${type}-color-buttons`);
+    if (colorGrid) colorGrid.innerHTML = '';
+    // 数量リセット
+    document.getElementById(`${type}-qty-input`).value = '10';
+    updateWorkBtn(type);
+    showScreen(`screen-${type}`);
+  }
+}
+
+// 裁断専用：SKUGroup選択
+function selectSaidanProduct(sku, btn) {
+  workState.saidan.product = { code: sku, name: SKU_NAMES[sku] || sku };
+  workState.saidan.color = '';
+  workState.saidan.partCategory = '';
+  workState.saidan.partName = '';
+  workState.saidan.part = '';
+
+  document.querySelectorAll('#saidan-product-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+
+  // カラーボタン生成
+  const colorSection = document.getElementById('saidan-color-section');
+  const colorGrid = document.getElementById('saidan-color-buttons');
+  const colors = SKU_COLORS[sku] || [];
+
+  if (colors.length === 0) {
+    // カラーがない場合（FBOL等）はスキップ
+    colorSection.style.display = 'none';
+    workState.saidan.color = '*';
+    showSaidanCategories(sku, '*');
+  } else {
+    colorSection.style.display = '';
+    colorGrid.innerHTML = '';
+    colors.forEach(c => {
+      const cbtn = document.createElement('button');
+      cbtn.className = 'color-btn';
+      cbtn.textContent = colorLabel(c);
+      cbtn.onclick = () => {
+        workState.saidan.color = c;
+        document.querySelectorAll('#saidan-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+        cbtn.classList.add('selected');
+        showSaidanCategories(sku, c);
+      };
+      colorGrid.appendChild(cbtn);
+    });
+  }
+
+  // カテゴリ・パーツセクション非表示
+  document.getElementById('saidan-category-section').style.display = 'none';
+  document.getElementById('saidan-part-section').style.display = 'none';
+  updateWorkBtn('saidan');
+}
+
+// 裁断：パーツカテゴリ選択表示
+function showSaidanCategories(sku, colorCode) {
+  const catSection = document.getElementById('saidan-category-section');
+  const catGrid = document.getElementById('saidan-category-buttons');
+  catSection.style.display = '';
+  catGrid.innerHTML = '';
+
+  workState.saidan.partCategory = '';
+  workState.saidan.partName = '';
+  workState.saidan.part = '';
+
+  // このSKU+カラーに存在するカテゴリだけを表示
+  const allParts = getPartsForSKUColor(sku, colorCode);
+  const availableCategories = SAIDAN_CATEGORIES.filter(cat =>
+    allParts.some(p => p.category === cat.code)
+  );
+
+  availableCategories.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'color-btn';
+    btn.textContent = cat.label;
+    btn.onclick = () => {
+      workState.saidan.partCategory = cat.code;
+      document.querySelectorAll('#saidan-category-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      showSaidanPartsList(sku, colorCode, cat.code);
+    };
+    catGrid.appendChild(btn);
+  });
+
+  document.getElementById('saidan-part-section').style.display = 'none';
+  updateWorkBtn('saidan');
+}
+
+// 裁断：パーツリスト表示
+function showSaidanPartsList(sku, colorCode, categoryCode) {
+  const parts = getCuttingParts(sku, colorCode, categoryCode);
+  const section = document.getElementById('saidan-part-section');
+  const list = document.getElementById('saidan-part-list');
+
+  if (parts.length === 0) {
+    section.style.display = 'none';
+    workState.saidan.partName = '';
+    workState.saidan.part = '';
+    updateWorkBtn('saidan');
+    return;
+  }
+
+  if (parts.length === 1) {
+    // 1つだけなら自動選択
+    section.style.display = 'none';
+    workState.saidan.partName = parts[0].partName;
+    workState.saidan.part = parts[0].partName;
+    updateWorkBtn('saidan');
+    return;
+  }
+
+  // 複数パーツがある場合はリスト表示
+  section.style.display = '';
+  list.innerHTML = '';
+  parts.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'material-list-item';
+    item.textContent = `${p.partName} (x${p.quantity})`;
+    item.onclick = () => {
+      workState.saidan.partName = p.partName;
+      workState.saidan.part = p.partName;
+      document.querySelectorAll('#saidan-part-list .material-list-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      updateWorkBtn('saidan');
+    };
+    list.appendChild(item);
+  });
+  updateWorkBtn('saidan');
+}
+
+// プリント・入庫用：商品選択
+function selectWorkProduct(type, product, btn) {
+  workState[type].product = product;
+  workState[type].color = '';
+  workState[type].part = '';
+  document.querySelectorAll(`#${type}-product-buttons .color-btn`).forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+
+  // カラーボタン生成
+  const colorGrid = document.getElementById(`${type}-color-buttons`);
+  if (colorGrid) {
+    colorGrid.innerHTML = '';
+    product.colors.forEach(c => {
+      const cbtn = document.createElement('button');
+      cbtn.className = 'color-btn';
+      cbtn.textContent = c;
+      cbtn.onclick = () => {
+        workState[type].color = c;
+        document.querySelectorAll(`#${type}-color-buttons .color-btn`).forEach(b => b.classList.remove('selected'));
+        cbtn.classList.add('selected');
+        updateWorkBtn(type);
+      };
+      colorGrid.appendChild(cbtn);
+    });
+  }
+  updateWorkBtn(type);
+}
+
+function changeWorkQty(type, delta) {
+  workState[type].quantity = Math.max(1, workState[type].quantity + delta);
+  document.getElementById(`${type}-qty-input`).value = workState[type].quantity;
+}
+function syncWorkQtyFromInput(type) {
+  workState[type].quantity = Math.max(1, parseInt(document.getElementById(`${type}-qty-input`).value) || 1);
+}
+
+function updateWorkBtn(type) {
+  const btn = document.getElementById(`${type}-submit-btn`);
+  const ws = workState[type];
+  if (!ws.product) {
+    btn.textContent = '商品を選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else if (!ws.color) {
+    btn.textContent = 'カラーを選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else if (type === 'saidan' && !ws.partName) {
+    btn.textContent = 'パーツを選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else {
+    const labels = { saidan: '裁断完了', print: 'プリント完了' };
+    const partLabel = type === 'saidan' ? ` ${ws.partName}` : '';
+    const colorDisp = type === 'saidan' ? colorLabel(ws.color) : ws.color;
+    let btnText = `${labels[type]}を記録する ✅ ${ws.product.code} ${colorDisp}${partLabel} ×${ws.quantity}`;
+    btn.textContent = btnText;
+    btn.className = 'submit-btn ready';
+  }
+}
+
+function submitWork(type) {
+  const ws = workState[type];
+  if (!ws.product || !ws.color) return;
+  if (type === 'saidan' && !ws.partName) return;
+
+  const labels = { saidan: '裁断完了', print: 'プリント完了' };
+  const record = {
+    date: new Date().toISOString(),
+    product: ws.product.code,
+    productName: ws.product.name,
+    color: ws.color,
+    partCategory: type === 'saidan' ? ws.partCategory : undefined,
+    partName: type === 'saidan' ? ws.partName : undefined,
+    quantity: ws.quantity,
+    type: labels[type]
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  workSuccessFrom = `screen-${type}`;
+  document.getElementById('work-success-msg').textContent = `${labels[type]}を記録しました！`;
+  const partInfo = type === 'saidan' ? ` / ${ws.partName}` : '';
+  const colorDisp2 = type === 'saidan' ? colorLabel(ws.color) : ws.color;
+  const skuName = SKU_NAMES[ws.product.code] ? ` ${SKU_NAMES[ws.product.code]}` : '';
+  let detailText = `${ws.product.code}${skuName} / ${colorDisp2}${partInfo} / ${ws.quantity}枚`;
+  document.getElementById('work-success-detail').textContent = detailText;
+  showScreen('screen-work-success');
+}
+
+function workSuccessBack() {
+  if (workSuccessFrom === 'screen-dash-megu') {
+    showScreen('screen-dash-megu');
+  } else if (workSuccessFrom === 'screen-dash-kenpin') {
+    showScreen('screen-dash-kenpin');
+  } else if (workSuccessFrom === 'screen-nyuko') {
+    startNyuko();
+  } else {
+    const type = workSuccessFrom.replace('screen-', '');
+    startWork(type);
+  }
+}
+
+// ===== 材料 発注 =====
+let materialState = { order: { selected: '', memo: '', category: '', quantity: 1, price: 0, payment: '' } };
+
+function selectPayment(method, btn) {
+  materialState.order.payment = method;
+  document.querySelectorAll('#order-payment-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function startMaterial(type) {
+  materialState.order = { selected: '', category: '', memo: '', quantity: 1, price: 0, payment: '' };
+  document.getElementById('order-price').value = '';
+  document.querySelectorAll('#order-payment-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  // カテゴリボタン生成
+  const catGrid = document.getElementById('order-category-buttons');
+  catGrid.innerHTML = '';
+  MATERIAL_CATEGORIES.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'color-btn';
+    btn.textContent = cat.name;
+    btn.onclick = () => selectOrderCategory(cat, btn);
+    catGrid.appendChild(btn);
+  });
+  // 材料リスト非表示
+  document.getElementById('order-material-section').style.display = 'none';
+  document.getElementById('order-qty-section').style.display = 'none';
+  document.getElementById('order-memo').value = '';
+  document.getElementById('order-qty-input').value = '1';
+  updateMaterialBtn('order');
+  showScreen('screen-order');
+}
+
+function selectOrderCategory(category, btn) {
+  materialState.order.category = category.name;
+  materialState.order.selected = '';
+  document.querySelectorAll('#order-category-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+
+  // 材料リストを名前昇順で生成
+  const section = document.getElementById('order-material-section');
+  const list = document.getElementById('order-material-list');
+  section.style.display = '';
+  list.innerHTML = '';
+  const sorted = [...category.items].sort((a, b) => a.localeCompare(b, 'ja'));
+  sorted.forEach(m => {
+    const item = document.createElement('div');
+    item.className = 'material-list-item';
+    item.textContent = m;
+    item.onclick = () => {
+      materialState.order.selected = m;
+      document.querySelectorAll('#order-material-list .material-list-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      // 数量セクション表示
+      document.getElementById('order-qty-section').style.display = '';
+      const unit = MATERIAL_UNITS[category.name] || '';
+      document.getElementById('order-qty-unit').textContent = `単位: ${unit}`;
+      updateMaterialBtn('order');
+    };
+    list.appendChild(item);
+  });
+  document.getElementById('order-qty-section').style.display = 'none';
+  updateMaterialBtn('order');
+}
+
+function changeOrderQty(delta) {
+  materialState.order.quantity = Math.max(1, materialState.order.quantity + delta);
+  document.getElementById('order-qty-input').value = materialState.order.quantity;
+  updateMaterialBtn('order');
+}
+function syncOrderQtyFromInput() {
+  materialState.order.quantity = Math.max(1, parseInt(document.getElementById('order-qty-input').value) || 1);
+  updateMaterialBtn('order');
+}
+
+function updateMaterialBtn(type) {
+  const btn = document.getElementById('order-submit-btn');
+  const ms = materialState.order;
+  if (!ms.selected) {
+    btn.textContent = '材料を選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else {
+    const unit = MATERIAL_UNITS[ms.category] || '';
+    btn.textContent = `発注を記録する ✅ ${ms.selected} ${ms.quantity}${unit}`;
+    btn.className = 'submit-btn ready';
+  }
+}
+
+function submitMaterial(type) {
+  const ms = materialState.order;
+  if (!ms.selected) return;
+
+  const unit = MATERIAL_UNITS[ms.category] || '';
+  const price = parseInt(document.getElementById('order-price').value) || 0;
+  const record = {
+    date: new Date().toISOString(),
+    material: ms.selected,
+    category: ms.category,
+    quantity: ms.quantity,
+    unit: unit,
+    price: price,
+    payment: ms.payment,
+    memo: document.getElementById('order-memo').value,
+    type: '材料発注'
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  const priceDisp = price ? ` ¥${price.toLocaleString()}` : '';
+  const payDisp = ms.payment ? ` [${ms.payment}]` : '';
+  workSuccessFrom = 'screen-dash-megu';
+  document.getElementById('work-success-msg').textContent = '材料発注を記録しました！';
+  document.getElementById('work-success-detail').textContent =
+    `${ms.selected} ${ms.quantity}${unit}${priceDisp}${payDisp}${record.memo ? '（' + record.memo + '）' : ''}`;
+  showScreen('screen-work-success');
+}
+
+// ===== 材料 入荷（発注待ちリスト方式） =====
+let arriveState = { selectedOrder: null, option: '', memo: '' };
+
+function startArrive() {
+  arriveState = { selectedOrder: null, option: '', memo: '' };
+
+  // 発注済みで入荷未済の材料を取得
+  const pendingOrders = getPendingOrders();
+  const listEl = document.getElementById('arrive-pending-list');
+  listEl.innerHTML = '';
+
+  if (pendingOrders.length === 0) {
+    listEl.innerHTML = '<div class="no-pending">発注中の材料はありません</div>';
+  } else {
+    pendingOrders.forEach((order, idx) => {
+      const d = new Date(order.date);
+      const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+      const unit = order.unit || '';
+      const div = document.createElement('div');
+      div.className = 'pending-order';
+      div.innerHTML = `
+        <div class="order-material">${order.material}</div>
+        <div class="order-meta">${dateStr} 発注 / ${order.quantity || ''}${unit}${order.memo ? ' / ' + order.memo : ''}</div>
+      `;
+      div.onclick = () => selectPendingOrder(order, div);
+      listEl.appendChild(div);
+    });
+  }
+
+  document.getElementById('arrive-options-section').style.display = 'none';
+  document.getElementById('arrive-memo-section').style.display = 'none';
+  updateArriveBtn();
+  showScreen('screen-arrive');
+}
+
+function getPendingOrders() {
+  const orders = state.records.filter(r => r.type === '材料発注');
+  const arrivals = state.records.filter(r => r.type === '材料入荷');
+
+  return orders.filter(order => {
+    // マッチ条件: 同じmaterialかつorderDateが一致する入荷がない
+    return !arrivals.some(a => a.material === order.material && a.orderDate === order.date);
+  });
+}
+
+function selectPendingOrder(order, el) {
+  arriveState.selectedOrder = order;
+  arriveState.option = '';
+  arriveState.memo = '';
+
+  document.querySelectorAll('#arrive-pending-list .pending-order').forEach(d => d.classList.remove('selected'));
+  el.classList.add('selected');
+
+  // オプション表示
+  document.getElementById('arrive-options-section').style.display = '';
+  document.querySelectorAll('.arrive-option').forEach(b => b.classList.remove('selected'));
+  document.getElementById('arrive-memo-section').style.display = 'none';
+  document.getElementById('arrive-memo').value = '';
+  // 価格セクション表示
+  document.getElementById('arrive-price-section').style.display = '';
+  document.getElementById('arrive-price').value = order.price || '';
+  document.getElementById('arrive-price-ref').textContent = order.price ? `発注時: ¥${order.price.toLocaleString()}${order.payment ? '（' + order.payment + '）' : ''}` : '';
+  updateArriveBtn();
+}
+
+function selectArriveOption(option) {
+  arriveState.option = option;
+  document.querySelectorAll('.arrive-option').forEach(b => b.classList.remove('selected'));
+  if (option === 'normal') {
+    document.querySelector('.arrive-option.normal').classList.add('selected');
+  } else {
+    document.querySelector('.arrive-option.changed').classList.add('selected');
+  }
+  document.getElementById('arrive-memo-section').style.display = '';
+  updateArriveBtn();
+}
+
+function updateArriveBtn() {
+  const btn = document.getElementById('arrive-submit-btn');
+  if (!arriveState.selectedOrder) {
+    btn.textContent = '発注を選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else if (!arriveState.option) {
+    btn.textContent = '入荷状況を選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else {
+    const statusLabel = arriveState.option === 'normal' ? '予定通り' : '変更あり';
+    btn.textContent = `入荷を記録する ✅ ${arriveState.selectedOrder.material}（${statusLabel}）`;
+    btn.className = 'submit-btn ready';
+  }
+}
+
+function submitArrive() {
+  if (!arriveState.selectedOrder || !arriveState.option) return;
+
+  const memo = document.getElementById('arrive-memo').value || '';
+  const arrivePrice = parseInt(document.getElementById('arrive-price').value) || 0;
+  const record = {
+    date: new Date().toISOString(),
+    type: '材料入荷',
+    material: arriveState.selectedOrder.material,
+    orderDate: arriveState.selectedOrder.date,
+    status: arriveState.option,
+    memo: memo,
+    price: arrivePrice,
+    quantity: arriveState.selectedOrder.quantity
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  workSuccessFrom = 'screen-dash-megu';
+  document.getElementById('work-success-msg').textContent = '材料入荷を記録しました！';
+  const statusLabel = arriveState.option === 'normal' ? '予定通り' : '変更あり';
+  const arrivePriceDisp = arrivePrice ? ` ¥${arrivePrice.toLocaleString()}` : '';
+  document.getElementById('work-success-detail').textContent =
+    `${arriveState.selectedOrder.material}（${statusLabel}）${arrivePriceDisp}${memo ? ' / ' + memo : ''}`;
+  showScreen('screen-work-success');
+}
+
+// ===== 検品フロー =====
+let kenpinState = { selectedDelivery: null, quantityOk: 0, quantityBGrade: 0, quantityRejected: 0 };
+
+function getPendingDeliveries() {
+  const deliveries = state.records.filter(r => r.type === '納品');
+  const inspections = state.records.filter(r => r.type === '検品完了');
+  return deliveries.filter(d => !inspections.some(k => k.nouhinDate === d.date));
+}
+
+function getPendingKenpins() {
+  const kenpins = state.records.filter(r => r.type === '検品完了');
+  const nyukos = state.records.filter(r => r.type === '入庫');
+  return kenpins.filter(k => !nyukos.some(n => n.kenpinDate === k.date));
+}
+
+function startKenpin() {
+  kenpinState = { selectedDelivery: null, quantityOk: 0, quantityBGrade: 0, quantityRejected: 0 };
+  const pending = getPendingDeliveries();
+  const listEl = document.getElementById('kenpin-pending-list');
+  listEl.innerHTML = '';
+
+  if (pending.length === 0) {
+    listEl.innerHTML = '<div class="no-pending">検品待ちの納品はありません</div>';
+  } else {
+    pending.forEach(d => {
+      const dt = new Date(d.date);
+      const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+      const div = document.createElement('div');
+      div.className = 'pending-order';
+      div.innerHTML = `
+        <div class="order-material">${d.name}さん — ${d.product}</div>
+        <div class="order-meta">${d.color} / ${d.quantity}個 / ${dateStr} 納品</div>
+      `;
+      div.onclick = () => selectKenpinDelivery(d, div);
+      listEl.appendChild(div);
+    });
+  }
+
+  document.getElementById('kenpin-detail-section').style.display = 'none';
+  updateKenpinBtn();
+  showScreen('screen-kenpin');
+}
+
+function selectKenpinDelivery(delivery, el) {
+  kenpinState.selectedDelivery = delivery;
+  kenpinState.quantityOk = delivery.quantity;
+  kenpinState.quantityBGrade = 0;
+  kenpinState.quantityRejected = 0;
+
+  document.querySelectorAll('#kenpin-pending-list .pending-order').forEach(d => d.classList.remove('selected'));
+  el.classList.add('selected');
+
+  const dt = new Date(delivery.date);
+  const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+  document.getElementById('kenpin-detail').innerHTML = `
+    <div style="margin-bottom:8px;"><strong>${delivery.name}さん</strong></div>
+    <div>${delivery.product} / ${delivery.color}</div>
+    <div>数量: ${delivery.quantity}個 / 納品日: ${dateStr}</div>
+  `;
+  document.getElementById('kenpin-detail-section').style.display = '';
+
+  document.getElementById('kenpin-ok-input').value = kenpinState.quantityOk;
+  document.getElementById('kenpin-bgrade-input').value = kenpinState.quantityBGrade;
+  document.getElementById('kenpin-rejected-input').value = kenpinState.quantityRejected;
+
+  updateKenpinBtn();
+}
+
+function changeKenpinQty(field, delta) {
+  if (!kenpinState.selectedDelivery) return;
+  const total = kenpinState.selectedDelivery.quantity;
+
+  if (field === 'ok') {
+    kenpinState.quantityOk = Math.max(0, Math.min(total, kenpinState.quantityOk + delta));
+    // Adjust others if total exceeded
+    const remaining = total - kenpinState.quantityOk;
+    if (kenpinState.quantityBGrade + kenpinState.quantityRejected > remaining) {
+      const ratio = remaining / (kenpinState.quantityBGrade + kenpinState.quantityRejected || 1);
+      kenpinState.quantityBGrade = Math.floor(kenpinState.quantityBGrade * ratio);
+      kenpinState.quantityRejected = remaining - kenpinState.quantityBGrade;
+    }
+  } else if (field === 'bgrade') {
+    const newVal = Math.max(0, kenpinState.quantityBGrade + delta);
+    const maxAllowed = total - kenpinState.quantityRejected;
+    kenpinState.quantityBGrade = Math.min(newVal, maxAllowed);
+    kenpinState.quantityOk = total - kenpinState.quantityBGrade - kenpinState.quantityRejected;
+    if (kenpinState.quantityOk < 0) {
+      kenpinState.quantityRejected += kenpinState.quantityOk;
+      kenpinState.quantityOk = 0;
+    }
+  } else if (field === 'rejected') {
+    const newVal = Math.max(0, kenpinState.quantityRejected + delta);
+    const maxAllowed = total - kenpinState.quantityBGrade;
+    kenpinState.quantityRejected = Math.min(newVal, maxAllowed);
+    kenpinState.quantityOk = total - kenpinState.quantityBGrade - kenpinState.quantityRejected;
+    if (kenpinState.quantityOk < 0) {
+      kenpinState.quantityBGrade += kenpinState.quantityOk;
+      kenpinState.quantityOk = 0;
+    }
+  }
+
+  document.getElementById('kenpin-ok-input').value = kenpinState.quantityOk;
+  document.getElementById('kenpin-bgrade-input').value = kenpinState.quantityBGrade;
+  document.getElementById('kenpin-rejected-input').value = kenpinState.quantityRejected;
+  updateKenpinBtn();
+}
+
+function syncKenpinFromInput(field) {
+  if (!kenpinState.selectedDelivery) return;
+  const total = kenpinState.selectedDelivery.quantity;
+  const val = Math.max(0, parseInt(document.getElementById(`kenpin-${field === 'bgrade' ? 'bgrade' : field === 'rejected' ? 'rejected' : 'ok'}-input`).value) || 0);
+  if (field === 'ok') kenpinState.quantityOk = Math.min(val, total);
+  else if (field === 'bgrade') kenpinState.quantityBGrade = Math.min(val, total);
+  else kenpinState.quantityRejected = Math.min(val, total);
+  // Clamp: ok = total - bgrade - rejected
+  const sum = kenpinState.quantityOk + kenpinState.quantityBGrade + kenpinState.quantityRejected;
+  if (sum > total) {
+    kenpinState.quantityOk = Math.max(0, total - kenpinState.quantityBGrade - kenpinState.quantityRejected);
+  }
+  document.getElementById('kenpin-ok-input').value = kenpinState.quantityOk;
+  document.getElementById('kenpin-bgrade-input').value = kenpinState.quantityBGrade;
+  document.getElementById('kenpin-rejected-input').value = kenpinState.quantityRejected;
+  updateKenpinBtn();
+}
+
+function updateKenpinBtn() {
+  const btn = document.getElementById('kenpin-submit-btn');
+  if (!kenpinState.selectedDelivery) {
+    btn.textContent = '検品する納品を選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else {
+    const d = kenpinState.selectedDelivery;
+    btn.textContent = `検品完了を記録する ✅ ${d.product} ${d.color} OK:${kenpinState.quantityOk} B品:${kenpinState.quantityBGrade} 不可:${kenpinState.quantityRejected}`;
+    btn.className = 'submit-btn ready';
+  }
+}
+
+function submitKenpin() {
+  if (!kenpinState.selectedDelivery) return;
+  const d = kenpinState.selectedDelivery;
+
+  const record = {
+    date: new Date().toISOString(),
+    type: '検品完了',
+    nouhinDate: d.date,
+    name: d.name,
+    product: d.product,
+    productName: d.productName,
+    color: d.color,
+    quantityOk: kenpinState.quantityOk,
+    quantityBGrade: kenpinState.quantityBGrade,
+    quantityRejected: kenpinState.quantityRejected,
+    quantityTotal: d.quantity
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  workSuccessFrom = 'screen-dash-kenpin';
+  document.getElementById('work-success-msg').textContent = '検品完了を記録しました！';
+  document.getElementById('work-success-detail').textContent =
+    `${d.name}さん / ${d.product} / ${d.color} / OK:${kenpinState.quantityOk} B品:${kenpinState.quantityBGrade} 不可:${kenpinState.quantityRejected}`;
+  showScreen('screen-work-success');
+}
+
+// ===== 新・入庫フロー（検品済みリストベース） =====
+let nyukoState = { selectedKenpin: null };
+
+function startNyuko() {
+  nyukoState = { selectedKenpin: null };
+  const pending = getPendingKenpins();
+  const listEl = document.getElementById('nyuko-pending-list');
+  listEl.innerHTML = '';
+
+  if (pending.length === 0) {
+    listEl.innerHTML = '<div class="no-pending">入庫待ちの検品済み製品はありません</div>';
+  } else {
+    pending.forEach(k => {
+      const dt = new Date(k.date);
+      const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+      const div = document.createElement('div');
+      div.className = 'pending-order';
+      div.innerHTML = `
+        <div class="order-material">${k.product} / ${k.color}</div>
+        <div class="order-meta">${k.name}さん / OK:${k.quantityOk} B品:${k.quantityBGrade} 不可:${k.quantityRejected} / ${dateStr} 検品</div>
+      `;
+      div.onclick = () => selectNyukoKenpin(k, div);
+      listEl.appendChild(div);
+    });
+  }
+
+  document.getElementById('nyuko-confirm-section').style.display = 'none';
+  updateNyukoBtn();
+  showScreen('screen-nyuko');
+}
+
+function selectNyukoKenpin(kenpin, el) {
+  nyukoState.selectedKenpin = kenpin;
+
+  document.querySelectorAll('#nyuko-pending-list .pending-order').forEach(d => d.classList.remove('selected'));
+  el.classList.add('selected');
+
+  const dt = new Date(kenpin.date);
+  const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+  document.getElementById('nyuko-confirm-detail').innerHTML = `
+    <div style="margin-bottom:4px;"><strong>${kenpin.product}</strong> / ${kenpin.color}</div>
+    <div>${kenpin.name}さん / 検品日: ${dateStr}</div>
+    <div style="margin-top:4px;">OK品: ${kenpin.quantityOk}個（入庫対象） / B品: ${kenpin.quantityBGrade}個 / 不可: ${kenpin.quantityRejected}個</div>
+  `;
+  document.getElementById('nyuko-confirm-section').style.display = '';
+  updateNyukoBtn();
+}
+
+function updateNyukoBtn() {
+  const btn = document.getElementById('nyuko-submit-btn');
+  if (!nyukoState.selectedKenpin) {
+    btn.textContent = '検品済みの製品を選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else {
+    const k = nyukoState.selectedKenpin;
+    btn.textContent = `入庫を記録する ✅ ${k.product} ${k.color} OK:${k.quantityOk} B品:${k.quantityBGrade}`;
+    btn.className = 'submit-btn ready';
+  }
+}
+
+function submitNyuko() {
+  if (!nyukoState.selectedKenpin) return;
+  const k = nyukoState.selectedKenpin;
+
+  const record = {
+    date: new Date().toISOString(),
+    type: '入庫',
+    kenpinDate: k.date,
+    product: k.product,
+    productName: k.productName,
+    color: k.color,
+    quantity: k.quantityOk,
+    bGrade: k.quantityBGrade,
+    rejected: k.quantityRejected
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  workSuccessFrom = 'screen-nyuko';
+  document.getElementById('work-success-msg').textContent = '入庫を記録しました！';
+  document.getElementById('work-success-detail').textContent =
+    `${k.product} / ${k.color} / OK:${k.quantityOk}個 B品:${k.quantityBGrade}個`;
+  showScreen('screen-work-success');
+}
+
+// ===== ダッシュボード動的表示 =====
+
+// --- ヘルパー: 日付フォーマット ---
+function fmtDate(isoStr) {
+  const d = new Date(isoStr);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+// --- 全体管理ダッシュボード ---
+function refreshMeguDash() {
+  refreshMaterialAlerts();
+  refreshProductionProgress();
+  refreshStockSummary();
+}
+
+function refreshMaterialAlerts() {
+  const el = document.getElementById('megu-material-alerts');
+  if (!el) return;
+
+  const orders = state.records.filter(r => r.type === '材料発注');
+  const arrivals = state.records.filter(r => r.type === '材料入荷');
+
+  // 発注済み未入荷
+  const pending = orders.filter(order =>
+    !arrivals.some(a => a.material === order.material && a.orderDate === order.date)
+  );
+
+  // 材料ごとに最終発注・入荷を集計
+  const materialStatus = {};
+  orders.forEach(o => {
+    if (!materialStatus[o.material]) materialStatus[o.material] = { orders: 0, arrivals: 0, pending: 0, lastOrder: o.date };
+    materialStatus[o.material].orders++;
+    if (o.date > materialStatus[o.material].lastOrder) materialStatus[o.material].lastOrder = o.date;
+  });
+  arrivals.forEach(a => {
+    if (materialStatus[a.material]) materialStatus[a.material].arrivals++;
+  });
+  pending.forEach(p => {
+    if (materialStatus[p.material]) materialStatus[p.material].pending++;
+  });
+
+  let html = '';
+
+  // 未入荷の発注を表示（urgent）
+  if (pending.length > 0) {
+    pending.forEach(p => {
+      const colorInfo = p.color ? ` / ${p.color}` : '';
+      const qtyInfo = p.quantity ? ` ${p.quantity}${p.unit || ''}` : '';
+      html += `<div class="alert-card urgent">
+        <div class="alert-title">${p.material}${colorInfo} <span class="badge red">発注済み・未入荷</span></div>
+        <div class="alert-detail">${fmtDate(p.date)} 発注${qtyInfo}${p.memo ? ' / ' + p.memo : ''}</div>
+      </div>`;
+    });
+  }
+
+  // 最近入荷した材料（直近5件）
+  const recentArrivals = [...arrivals].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+  recentArrivals.forEach(a => {
+    const statusLabel = a.status === 'normal' ? '予定通り' : '変更あり';
+    html += `<div class="alert-card ok">
+      <div class="alert-title">${a.material} <span class="badge green">入荷済み</span></div>
+      <div class="alert-detail">${fmtDate(a.date)} ${statusLabel}${a.memo ? ' / ' + a.memo : ''}</div>
+    </div>`;
+  });
+
+  if (!html) {
+    html = '<div class="no-data">材料の発注・入荷記録はまだありません。<br>「材料を発注した」から記録を始めましょう。</div>';
+  }
+  el.innerHTML = html;
+}
+
+function refreshProductionProgress() {
+  const el = document.getElementById('megu-production-progress');
+  if (!el) return;
+
+  const saidan = state.records.filter(r => r.type === '裁断完了');
+  const prints = state.records.filter(r => r.type === 'プリント完了');
+  const mochidashi = state.records.filter(r => r.type === '持ち出し');
+  const nouhin = state.records.filter(r => r.type === '納品');
+  const kenpin = state.records.filter(r => r.type === '検品完了');
+  const nyuko = state.records.filter(r => r.type === '入庫');
+
+  // 商品×カラー別に集計
+  const progress = {};
+  function addToProgress(records, field) {
+    records.forEach(r => {
+      const key = `${r.product}_${r.color || ''}`;
+      if (!progress[key]) {
+        progress[key] = { product: r.product, productName: r.productName || SKU_NAMES[r.product] || r.product, color: r.color || '', saidan: 0, print: 0, mochidashi: 0, nouhin: 0, kenpin: 0, nyuko: 0 };
+      }
+      progress[key][field] += (r.quantity || r.quantityOk || 0);
+    });
+  }
+
+  addToProgress(saidan, 'saidan');
+  addToProgress(prints, 'print');
+  addToProgress(mochidashi, 'mochidashi');
+  addToProgress(nouhin, 'nouhin');
+  addToProgress(kenpin, 'kenpin');
+  addToProgress(nyuko, 'nyuko');
+
+  const keys = Object.keys(progress).sort();
+  if (keys.length === 0) {
+    el.innerHTML = '<div class="no-data">生産記録はまだありません。<br>裁断やプリントを記録すると、ここに進捗が表示されます。</div>';
+    return;
+  }
+
+  let html = '';
+  keys.forEach(key => {
+    const p = progress[key];
+    const colorDisp = p.color ? ` ${colorLabel(p.color)}` : '';
+    const name = SKU_NAMES[p.product] || p.productName || p.product;
+    html += `<div class="alert-card">
+      <div class="alert-title">${p.product}${colorDisp}</div>
+      <div class="pipeline">
+        <span class="pipeline-step${p.saidan > 0 ? ' done' : ''}">裁断 ${p.saidan}</span>
+        <span style="color:#ccc">→</span>
+        <span class="pipeline-step${p.print > 0 ? ' done' : ''}">プリント ${p.print}</span>
+        <span style="color:#ccc">→</span>
+        <span class="pipeline-step${p.mochidashi > 0 ? ' active' : ''}">持出 ${p.mochidashi}</span>
+        <span style="color:#ccc">→</span>
+        <span class="pipeline-step${p.nouhin > 0 ? ' done' : ''}">納品 ${p.nouhin}</span>
+        <span style="color:#ccc">→</span>
+        <span class="pipeline-step${p.kenpin > 0 ? ' done' : ''}">検品 ${p.kenpin}</span>
+        <span style="color:#ccc">→</span>
+        <span class="pipeline-step${p.nyuko > 0 ? ' done' : ''}">入庫 ${p.nyuko}</span>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function refreshStockSummary() {
+  const el = document.getElementById('megu-stock-summary');
+  if (!el) return;
+
+  const nyuko = state.records.filter(r => r.type === '入庫');
+  if (nyuko.length === 0) {
+    el.innerHTML = '<div class="no-data">入庫記録はまだありません。<br>入庫を記録すると在庫が表示されます。</div>';
+    return;
+  }
+
+  // 商品×カラー別に在庫集計
+  const stock = {};
+  nyuko.forEach(r => {
+    const key = `${r.product}_${r.color}`;
+    if (!stock[key]) stock[key] = { product: r.product, productName: r.productName || '', color: r.color, ok: 0, bGrade: 0 };
+    stock[key].ok += (r.quantity || 0);
+    stock[key].bGrade += (r.bGrade || 0);
+  });
+
+  const keys = Object.keys(stock).sort();
+  let html = '<div class="alert-card"><table class="stock-table">';
+  html += '<tr><th>商品</th><th>カラー</th><th style="text-align:right">OK品</th><th style="text-align:right">B品</th></tr>';
+  keys.forEach(key => {
+    const s = stock[key];
+    const name = SKU_NAMES[s.product] || s.productName || s.product;
+    const colorDisp = colorLabel(s.color);
+    html += `<tr>
+      <td>${s.product}</td>
+      <td>${colorDisp}</td>
+      <td class="num">${s.ok}</td>
+      <td class="num">${s.bGrade > 0 ? s.bGrade : '-'}</td>
+    </tr>`;
+  });
+  html += '</table></div>';
+  el.innerHTML = html;
+}
+
+// --- お母さんダッシュボード ---
+function refreshMomDash() {
+  // 持ち出し中（未納品）
+  const mochidashi = state.records.filter(r => r.type === '持ち出し');
+  const nouhin = state.records.filter(r => r.type === '納品');
+  const active = mochidashi.filter(m =>
+    !nouhin.some(n => n.name === m.name && n.product === m.product && n.color === m.color && n.date > m.date)
+  );
+
+  const el1 = document.getElementById('mom-active-jobs');
+  if (el1) {
+    if (active.length === 0) {
+      el1.innerHTML = '<div class="alert-card ok"><div class="alert-title">現在持ち出し中の仕事はありません</div></div>';
+    } else {
+      el1.innerHTML = active.map(m => {
+        const name = SKU_NAMES[m.product] || m.productName || m.product;
+        return `<div class="alert-card warning">
+          <div class="alert-title">${m.name}さん：${m.product} ${m.color} ×${m.quantity} <span class="badge orange">縫製中</span></div>
+          <div class="alert-detail">${fmtDate(m.date)} 持ち出し</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // 最近の入庫
+  const nyuko = state.records.filter(r => r.type === '入庫');
+  const el2 = document.getElementById('mom-recent-stock');
+  if (el2) {
+    const recent = [...nyuko].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+    if (recent.length === 0) {
+      el2.innerHTML = '<div class="no-data">入庫記録はまだありません</div>';
+    } else {
+      el2.innerHTML = recent.map(r => {
+        const name = SKU_NAMES[r.product] || r.productName || r.product;
+        return `<div class="alert-card ok">
+          <div class="alert-title">${r.product} ${colorLabel(r.color)} OK:${r.quantity} ${r.bGrade > 0 ? 'B品:' + r.bGrade : ''}</div>
+          <div class="alert-detail">${fmtDate(r.date)} 入庫</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // 在庫概要
+  const el3 = document.getElementById('mom-stock-overview');
+  if (el3) {
+    if (nyuko.length === 0) {
+      el3.innerHTML = '<div class="no-data">入庫記録が蓄積されると在庫状況が表示されます</div>';
+    } else {
+      const stock = {};
+      nyuko.forEach(r => {
+        const key = r.product;
+        if (!stock[key]) stock[key] = { product: r.product, productName: r.productName || '', total: 0 };
+        stock[key].total += (r.quantity || 0);
+      });
+      const keys = Object.keys(stock).sort();
+      el3.innerHTML = '<div class="alert-card">' + keys.map(k => {
+        const s = stock[k];
+        const name = SKU_NAMES[s.product] || s.productName || s.product;
+        return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0">
+          <span>${s.product}</span><span style="font-weight:600">${s.total}個</span>
+        </div>`;
+      }).join('') + '</div>';
+    }
+  }
+}
+
+// --- 山田さんダッシュボード ---
+function refreshYamadaDash() {
+  // 最近の裁断記録
+  const saidan = state.records.filter(r => r.type === '裁断完了');
+  const el1 = document.getElementById('yamada-recent-saidan');
+  if (el1) {
+    const recent = [...saidan].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+    if (recent.length === 0) {
+      el1.innerHTML = '<div class="no-data">裁断記録はまだありません</div>';
+    } else {
+      el1.innerHTML = recent.map(r => {
+        const name = SKU_NAMES[r.product] || r.productName || r.product;
+        const partInfo = r.partName ? ` / ${r.partName}` : '';
+        return `<div class="alert-card">
+          <div class="alert-title">${r.product} ${colorLabel(r.color)}${partInfo} ×${r.quantity}</div>
+          <div class="alert-detail">${fmtDate(r.date)}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // 最近のプリント記録
+  const prints = state.records.filter(r => r.type === 'プリント完了');
+  const el2 = document.getElementById('yamada-recent-print');
+  if (el2) {
+    const recent = [...prints].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+    if (recent.length === 0) {
+      el2.innerHTML = '<div class="no-data">プリント記録はまだありません</div>';
+    } else {
+      el2.innerHTML = recent.map(r => {
+        const name = SKU_NAMES[r.product] || r.productName || r.product;
+        return `<div class="alert-card">
+          <div class="alert-title">${r.product} ${r.color} ×${r.quantity}</div>
+          <div class="alert-detail">${fmtDate(r.date)}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  refreshYamadaNyukoPending();
+}
+
+function refreshKenpinDash() {
+  const pending = getPendingDeliveries();
+  const el = document.getElementById('kenpin-dash-pending');
+  if (!el) return;
+  if (pending.length === 0) {
+    el.innerHTML = '<div class="alert-card ok"><div class="alert-title">検品待ちはありません</div></div>';
+  } else {
+    el.innerHTML = pending.map(d => {
+      const dt = new Date(d.date);
+      const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+      return `<div class="alert-card warning">
+        <div class="alert-title">${d.name}さん ${d.product} ${d.color} ×${d.quantity} <span class="badge orange">検品待ち</span></div>
+        <div class="alert-detail">${dateStr} 納品</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function refreshYamadaNyukoPending() {
+  const pending = getPendingKenpins();
+  const el = document.getElementById('yamada-nyuko-pending');
+  if (!el) return;
+  if (pending.length === 0) {
+    el.innerHTML = '<div class="alert-card ok"><div class="alert-title">入庫待ちはありません</div></div>';
+  } else {
+    el.innerHTML = pending.map(k => {
+      const dt = new Date(k.date);
+      const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+      return `<div class="alert-card">
+        <div class="alert-title">${k.name}さん ${k.product} ${k.color} OK:${k.quantityOk} <span class="badge orange">検品済み→入庫して</span></div>
+        <div class="alert-detail">${dateStr} 検品</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// Override showScreen to refresh dashboards
+const _originalShowScreen = showScreen;
+showScreen = function(id) {
+  _originalShowScreen(id);
+  if (id === 'screen-dash-megu') refreshMeguDash();
+  if (id === 'screen-dash-mom') refreshMomDash();
+  if (id === 'screen-dash-kenpin') refreshKenpinDash();
+  if (id === 'screen-dash-yamada') refreshYamadaDash();
+};
+
+// Override showDashboard similarly
+const _originalShowDashboard = showDashboard;
+showDashboard = function(role) {
+  _originalShowDashboard(role);
+  if (role === 'megu') refreshMeguDash();
+  if (role === 'mom') refreshMomDash();
+  if (role === 'yamada') refreshYamadaDash();
+};
+
+// ===== データ管理（エクスポート/インポート） =====
+function exportData() {
+  const data = {
+    version: 1,
+    exportDate: new Date().toISOString(),
+    records: state.records
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  a.href = url;
+  a.download = `kitokito_backup_${dateStr}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.records || !Array.isArray(data.records)) {
+        alert('正しいバックアップファイルではありません');
+        return;
+      }
+      const msg = `${data.records.length}件の記録を復元します。\n現在の${state.records.length}件のデータは上書きされます。\n\nよろしいですか？`;
+      if (!confirm(msg)) return;
+
+      state.records = data.records;
+      localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+      // GASにも同期（クリアして全件再投入）
+      gasPost('clear', {}).then(() => {
+        gasPost('bulkAdd', { records: state.records });
+      });
+      alert('復元が完了しました！');
+      refreshSettingsInfo();
+    } catch(err) {
+      alert('ファイルの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ===== 初期データ取り込み（マージ方式） =====
+function importInitialData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.records || !Array.isArray(data.records)) {
+        alert('正しいデータファイルではありません');
+        return;
+      }
+
+      const productRecs = data.records.filter(r => r.type === '棚卸し');
+      const partsRecs = data.records.filter(r => r.type === 'パーツ棚卸し');
+
+      const msg = `取り込みデータ:\n` +
+        `  製品棚卸し: ${productRecs.length}件\n` +
+        `  パーツ棚卸し: ${partsRecs.length}件\n\n` +
+        `現在のデータ(${state.records.length}件)にマージします。\n` +
+        `同じ商品×カラーの棚卸しは新しいデータで上書きされます。\n\nよろしいですか？`;
+      if (!confirm(msg)) return;
+
+      // 既存の棚卸しレコードでキーが重複するものを除外
+      const newKeys = new Set();
+      productRecs.forEach(r => newKeys.add(`棚卸し_${r.product}_${r.color}`));
+      partsRecs.forEach(r => newKeys.add(`パーツ棚卸し_${r.category}_${r.partCode}`));
+
+      // 既存レコードから重複分を除外
+      const filtered = state.records.filter(r => {
+        if (r.type === '棚卸し') return !newKeys.has(`棚卸し_${r.product}_${r.color}`);
+        if (r.type === 'パーツ棚卸し') return !newKeys.has(`パーツ棚卸し_${r.category}_${r.partCode}`);
+        return true; // その他のタイプは残す
+      });
+
+      state.records = [...filtered, ...data.records];
+      localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+      // GASにも同期（クリアして全件再投入）
+      gasPost('clear', {}).then(() => {
+        gasPost('bulkAdd', { records: state.records });
+      });
+
+      alert(`取り込み完了！\n製品: ${productRecs.length}件\nパーツ: ${partsRecs.length}件\n合計: ${state.records.length}件`);
+      refreshSettingsInfo();
+    } catch(err) {
+      alert('ファイルの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ===== パーツ在庫表示 =====
+let currentPartsFilter = 'ALL';
+
+function filterParts(category) {
+  currentPartsFilter = category;
+  // ボタンの選択状態を更新
+  document.querySelectorAll('#dash-tab-parts-stock .parts-filter-bar .color-btn').forEach(btn => {
+    btn.classList.toggle('selected', btn.textContent.startsWith(category) || (category === 'ALL' && btn.textContent === 'すべて'));
+  });
+  refreshPartsStock();
+}
+
+function refreshPartsStock() {
+  const table = document.getElementById('parts-stock-table');
+  if (!table) return;
+
+  const partsRecords = state.records.filter(r => r.type === 'パーツ棚卸し');
+  if (partsRecords.length === 0) {
+    table.querySelector('thead').innerHTML = '';
+    table.querySelector('tbody').innerHTML = '<tr><td style="text-align:center; color:#86868b; padding:24px;">パーツ棚卸しデータがありません。<br>設定画面から初期データを取り込んでください。</td></tr>';
+    return;
+  }
+
+  // 同じpartCodeの最新データのみ採用
+  const latest = {};
+  partsRecords.forEach(r => {
+    const key = `${r.category}_${r.partCode}`;
+    if (!latest[key] || r.date > latest[key].date) latest[key] = r;
+  });
+
+  let items = Object.values(latest);
+
+  // フィルター適用
+  if (currentPartsFilter !== 'ALL') {
+    items = items.filter(r => r.category === currentPartsFilter);
+  }
+
+  // カテゴリ順 FA→FB→FC→H→B → パーツコード番号順
+  const CAT_ORDER = { 'FA': 0, 'FB': 1, 'FC': 2, 'H': 3, 'B': 4 };
+  items.sort((a, b) => {
+    const catA = CAT_ORDER[a.category] ?? 9;
+    const catB = CAT_ORDER[b.category] ?? 9;
+    if (catA !== catB) return catA - catB;
+    const numA = parseInt((a.partCode || '').replace(/\D/g, '')) || 0;
+    const numB = parseInt((b.partCode || '').replace(/\D/g, '')) || 0;
+    return numA - numB;
+  });
+
+  const CATEGORY_LABELS = { 'FA': '表地', 'FB': '裏地', 'FC': 'ポケット', 'H': 'ひも・テープ', 'B': '副資材' };
+
+  let thead = '<tr><th>区分</th><th>コード</th><th>パーツ名</th><th>SKUG</th><th style="text-align:right">在庫数</th></tr>';
+
+  let tbody = '';
+  items.forEach(r => {
+    const catLabel = CATEGORY_LABELS[r.category] || r.category;
+    const qtyClass = r.quantity === 0 ? 'color:#ff3b30; font-weight:600;' : '';
+    tbody += `<tr>`;
+    tbody += `<td><span class="badge ${r.quantity > 0 ? 'green' : 'red'}">${catLabel}</span></td>`;
+    tbody += `<td>${r.partCode || ''}</td>`;
+    tbody += `<td style="text-align:left;">${r.partName || ''}</td>`;
+    tbody += `<td>${r.skuGroup || ''}</td>`;
+    tbody += `<td class="num" style="${qtyClass}">${r.quantity}</td>`;
+    tbody += `</tr>`;
+  });
+
+  if (!tbody) {
+    tbody = '<tr><td colspan="5" style="text-align:center; color:#86868b; padding:24px;">該当データがありません</td></tr>';
+  }
+
+  table.querySelector('thead').innerHTML = thead;
+  table.querySelector('tbody').innerHTML = tbody;
+}
+
+function refreshSettingsInfo() {
+  const el = document.getElementById('settings-record-count');
+  if (!el) return;
+  const types = {};
+  state.records.forEach(r => {
+    types[r.type] = (types[r.type] || 0) + 1;
+  });
+  if (Object.keys(types).length === 0) {
+    el.textContent = 'まだ記録はありません';
+    return;
+  }
+  el.innerHTML = Object.entries(types).map(([t, c]) => `${t}: ${c}件`).join('<br>');
+}
+
+// ===== 棚卸し =====
+let tanaState = { product: null, color: '', quantityOk: 0, quantityBGrade: 0 };
+
+function initTanaoroshi() {
+  tanaState = { product: null, color: '', quantityOk: 0, quantityBGrade: 0 };
+  const grid = document.getElementById('tana-product-buttons');
+  grid.innerHTML = '';
+  PRODUCTS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'color-btn';
+    btn.textContent = p.code;
+    btn.onclick = () => selectTanaProduct(p);
+    grid.appendChild(btn);
+  });
+  document.getElementById('tana-color-section').style.display = 'none';
+  document.getElementById('tana-qty-section').style.display = 'none';
+  updateTanaBtn();
+  refreshTanaList();
+}
+
+function selectTanaProduct(product) {
+  tanaState.product = product;
+  tanaState.color = '';
+  tanaState.quantityOk = 0;
+  tanaState.quantityBGrade = 0;
+
+  document.querySelectorAll('#tana-product-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  event.target.classList.add('selected');
+
+  // カラーボタン生成
+  const colorSection = document.getElementById('tana-color-section');
+  const colorGrid = document.getElementById('tana-color-buttons');
+  colorGrid.innerHTML = '';
+  product.colors.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'color-btn';
+    btn.textContent = c;
+    btn.onclick = () => selectTanaColor(c, btn);
+    colorGrid.appendChild(btn);
+  });
+  colorSection.style.display = '';
+  document.getElementById('tana-qty-section').style.display = 'none';
+  updateTanaBtn();
+}
+
+function selectTanaColor(color, el) {
+  tanaState.color = color;
+  tanaState.quantityOk = 0;
+  tanaState.quantityBGrade = 0;
+
+  document.querySelectorAll('#tana-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+
+  document.getElementById('tana-ok-input').value = '0';
+  document.getElementById('tana-bgrade-input').value = '0';
+  document.getElementById('tana-qty-label').textContent = `${tanaState.product.code} / ${color} の在庫数`;
+  document.getElementById('tana-qty-section').style.display = '';
+  updateTanaBtn();
+}
+
+function changeTanaQty(field, delta) {
+  const inputId = field === 'ok' ? 'tana-ok-input' : 'tana-bgrade-input';
+  const el = document.getElementById(inputId);
+  el.value = Math.max(0, (parseInt(el.value) || 0) + delta);
+  updateTanaBtn();
+}
+
+function updateTanaBtn() {
+  const btn = document.getElementById('tana-submit-btn');
+  if (!tanaState.product) {
+    btn.textContent = '商品を選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else if (!tanaState.color) {
+    btn.textContent = 'カラーを選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else {
+    const ok = parseInt(document.getElementById('tana-ok-input').value) || 0;
+    const b = parseInt(document.getElementById('tana-bgrade-input').value) || 0;
+    btn.textContent = `棚卸しを登録する ✅ ${tanaState.product.code} ${tanaState.color} OK:${ok} B品:${b}`;
+    btn.className = 'submit-btn ready';
+  }
+}
+
+function submitTanaoroshi() {
+  if (!tanaState.product || !tanaState.color) return;
+  const qtyOk = parseInt(document.getElementById('tana-ok-input').value) || 0;
+  const qtyB = parseInt(document.getElementById('tana-bgrade-input').value) || 0;
+  if (qtyOk === 0 && qtyB === 0) {
+    if (!confirm('OK品・B品ともに0個で登録しますか？')) return;
+  }
+
+  const record = {
+    date: new Date().toISOString(),
+    type: '棚卸し',
+    product: tanaState.product.code,
+    productName: tanaState.product.name,
+    color: tanaState.color,
+    quantity: qtyOk,
+    bGrade: qtyB
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  // 次の入力のためリセット
+  tanaState.color = '';
+  tanaState.quantityOk = 0;
+  tanaState.quantityBGrade = 0;
+  document.querySelectorAll('#tana-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('tana-qty-section').style.display = 'none';
+  updateTanaBtn();
+  refreshTanaList();
+}
+
+function refreshTanaList() {
+  const el = document.getElementById('tana-registered-list');
+  if (!el) return;
+  const tana = state.records.filter(r => r.type === '棚卸し');
+  if (tana.length === 0) {
+    el.innerHTML = '<div class="no-data">棚卸しデータはまだありません</div>';
+    return;
+  }
+  // 最新のものを上に
+  const sorted = [...tana].sort((a, b) => b.date.localeCompare(a.date));
+  el.innerHTML = sorted.map(r => {
+    return `<div class="alert-card" style="padding:10px 16px;">
+      <div class="alert-title" style="font-size:14px;">${r.product} / ${r.color}</div>
+      <div class="alert-detail">OK:${r.quantity} B品:${r.bGrade} / ${fmtDate(r.date)}</div>
+    </div>`;
+  }).join('');
+}
+
+// showScreenに設定画面と棚卸し画面のリフレッシュを追加
+const _showScreenV2 = showScreen;
+showScreen = function(id) {
+  _showScreenV2(id);
+  if (id === 'screen-settings') refreshSettingsInfo();
+  if (id === 'screen-tanaoroshi') initTanaoroshi();
+};
+
+// 在庫サマリーに棚卸しデータも含める（refreshStockSummaryを上書き）
+const _origRefreshStock = refreshStockSummary;
+refreshStockSummary = function() {
+  const el = document.getElementById('megu-stock-summary');
+  if (!el) return;
+
+  const nyuko = state.records.filter(r => r.type === '入庫');
+  const tana = state.records.filter(r => r.type === '棚卸し');
+
+  if (nyuko.length === 0 && tana.length === 0) {
+    el.innerHTML = '<div class="no-data">入庫・棚卸し記録はまだありません。<br>棚卸しまたは入庫を記録すると在庫が表示されます。</div>';
+    return;
+  }
+
+  const stock = {};
+  // 棚卸しデータ（同じ商品×カラーは最新のみ採用）
+  const latestTana = {};
+  tana.forEach(r => {
+    const key = `${r.product}_${r.color}`;
+    if (!latestTana[key] || r.date > latestTana[key].date) latestTana[key] = r;
+  });
+  Object.values(latestTana).forEach(r => {
+    const key = `${r.product}_${r.color}`;
+    stock[key] = { product: r.product, productName: r.productName || '', color: r.color, ok: r.quantity || 0, bGrade: r.bGrade || 0 };
+  });
+
+  // 棚卸し後の入庫を加算
+  nyuko.forEach(r => {
+    const key = `${r.product}_${r.color}`;
+    const tanaKey = latestTana[key];
+    // 棚卸しより後の入庫のみ加算
+    if (tanaKey && r.date > tanaKey.date) {
+      stock[key].ok += (r.quantity || 0);
+      stock[key].bGrade += (r.bGrade || 0);
+    } else if (!tanaKey) {
+      // 棚卸しがない商品は入庫だけで集計
+      if (!stock[key]) stock[key] = { product: r.product, productName: r.productName || '', color: r.color, ok: 0, bGrade: 0 };
+      stock[key].ok += (r.quantity || 0);
+      stock[key].bGrade += (r.bGrade || 0);
+    }
+  });
+
+  const keys = Object.keys(stock).sort();
+  if (keys.length === 0) {
+    el.innerHTML = '<div class="no-data">在庫データはありません</div>';
+    return;
+  }
+  let html = '<div class="alert-card"><table class="stock-table">';
+  html += '<tr><th>商品</th><th>カラー</th><th style="text-align:right">OK品</th><th style="text-align:right">B品</th></tr>';
+  keys.forEach(key => {
+    const s = stock[key];
+    const name = SKU_NAMES[s.product] || s.productName || s.product;
+    html += `<tr>
+      <td>${s.product}</td>
+      <td>${s.color}</td>
+      <td class="num">${s.ok}</td>
+      <td class="num">${s.bGrade > 0 ? s.bGrade : '-'}</td>
+    </tr>`;
+  });
+  html += '</table></div>';
+  el.innerHTML = html;
+};
+
+// ===== 全体管理ダッシュボード タブ切替 =====
+function switchDashTab(tabId) {
+  document.querySelectorAll('#screen-dash-megu .dash-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#screen-dash-megu .dash-tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('dash-tab-' + tabId).classList.add('active');
+  // Activate the tab button
+  document.querySelectorAll('#screen-dash-megu .dash-tab').forEach(t => {
+    if ((tabId === 'zentai' && t.textContent === '全体管理') ||
+        (tabId === 'tanaoroshi-sheet' && t.textContent === '棚卸シート') ||
+        (tabId === 'hanbai' && t.textContent === '販売数') ||
+        (tabId === 'parts-stock' && t.textContent === 'パーツ在庫')) {
+      t.classList.add('active');
+    }
+  });
+  // Refresh the active tab content
+  if (tabId === 'zentai') refreshZentaiTable();
+  if (tabId === 'tanaoroshi-sheet') refreshTanaoroshiSheet();
+  if (tabId === 'hanbai') refreshHanbaiSheet();
+  if (tabId === 'parts-stock') refreshPartsStock();
+}
+
+// ===== 生産予定データ (plans) =====
+function loadPlans() {
+  try {
+    const s = localStorage.getItem('kitokito_plans');
+    return s ? JSON.parse(s) : {};
+  } catch(e) { return {}; }
+}
+function savePlans(plans) {
+  localStorage.setItem('kitokito_plans', JSON.stringify(plans));
+}
+
+// ===== SKU一覧生成 =====
+function generateAllSKUs() {
+  const skus = [];
+  PRODUCTS.forEach(p => {
+    const sizeCodes = p.sizes || [p.code];
+    sizeCodes.forEach(sizeCode => {
+      p.colors.forEach(colorStr => {
+        const colorCode = colorStr.split(' ')[0];
+        const colorName = colorStr.substring(colorCode.length).trim() || COLOR_NAMES[colorCode] || colorCode;
+        const groupCode = p.code;
+        skus.push({
+          sku: sizeCode + '_' + colorCode,
+          skuGroup: groupCode,
+          productCode: sizeCode,
+          colorCode: colorCode,
+          colorName: colorName,
+          productName: SKU_NAMES[sizeCode] || p.name
+        });
+      });
+    });
+  });
+  return skus;
+}
+
+// ===== 14-column 全体管理テーブル =====
+function refreshZentaiTable() {
+  const table = document.getElementById('zentai-table');
+  if (!table) return;
+
+  const allSKUs = generateAllSKUs();
+  const plans = loadPlans();
+  const records = state.records;
+
+  // Aggregate records per SKU (productCode + colorCode)
+  const agg = {};
+  allSKUs.forEach(s => { agg[s.sku] = { mochidashi: 0, nouhin: 0, kenpinOk: 0, kenpinB: 0, kenpinRejected: 0, nyukoQty: 0, nyukoB: 0, tanaoroshi: null, tanaDate: '' }; });
+
+  records.forEach(r => {
+    const key = r.product + '_' + (r.color || '');
+    if (!agg[key]) return; // skip unknown SKUs
+    if (r.type === '持ち出し') agg[key].mochidashi += (r.quantity || 0);
+    if (r.type === '納品') agg[key].nouhin += (r.quantity || r.quantityOk || 0);
+    if (r.type === '検品完了') {
+      agg[key].kenpinOk += (r.quantityOk || r.quantity || 0);
+      agg[key].kenpinB += (r.bGrade || 0);
+      agg[key].kenpinRejected += (r.rejected || 0);
+    }
+    if (r.type === '入庫') {
+      agg[key].nyukoQty += (r.quantity || 0);
+      agg[key].nyukoB += (r.bGrade || 0);
+    }
+    if (r.type === '棚卸し') {
+      if (!agg[key].tanaDate || r.date > agg[key].tanaDate) {
+        agg[key].tanaoroshi = (r.quantity || 0);
+        agg[key].tanaDate = r.date;
+      }
+    }
+  });
+
+  // Calculate sales from hanbai logic
+  const hanbaiData = calcHanbaiData();
+
+  // Build table
+  let thead = '<tr><th>SKU</th><th>グループ</th><th>カラー</th><th>生産予定数</th><th>縫製発注残</th><th>2025実績</th><th>縫製中</th><th>納品済</th><th>入庫待ち</th><th>B品</th><th>不可</th><th>入庫総数</th><th>棚卸在庫</th><th>販売数</th></tr>';
+  let tbody = '';
+
+  allSKUs.forEach(s => {
+    const a = agg[s.sku];
+    const plan = plans[s.sku] || {};
+    const planned = plan.planned || 0;
+    const actual2025 = plan.actual2025 || 0;
+    const sewing = a.mochidashi - a.nouhin; // 縫製中
+    const delivered = a.nouhin; // 納品済
+    const sewingRemain = planned - (Math.max(0, sewing) + delivered); // 縫製発注残
+    const waitNyuko = (a.kenpinOk + a.kenpinB) - a.nyukoQty - a.nyukoB; // 入庫待ち
+    const bGrade = a.kenpinB + a.nyukoB; // B品
+    const rejected = a.kenpinRejected; // 不可
+    const nyukoTotal = a.nyukoQty; // 入庫総数（A品のみ）
+    const tanaoroshi = a.tanaoroshi;
+    const hanbai = hanbaiData.totals[s.sku] || 0;
+
+    // Only show rows with any data
+    const hasData = planned || actual2025 || a.mochidashi || a.nouhin || a.kenpinOk || a.kenpinB || a.kenpinRejected || a.nyukoQty || a.nyukoB || tanaoroshi !== null || hanbai;
+    if (!hasData) return;
+
+    tbody += `<tr>
+      <td style="font-weight:600; text-align:left;">${s.sku}</td>
+      <td>${s.skuGroup}</td>
+      <td style="text-align:left;">${s.colorName}</td>
+      <td class="editable-cell" onclick="editPlanCell(this,'${s.sku}','planned',${planned})">${planned || '-'}</td>
+      <td class="num">${planned ? sewingRemain : '-'}</td>
+      <td class="editable-cell" onclick="editPlanCell(this,'${s.sku}','actual2025',${actual2025})">${actual2025 || '-'}</td>
+      <td class="num">${sewing > 0 ? sewing : (sewing < 0 ? sewing : '-')}</td>
+      <td class="num">${delivered || '-'}</td>
+      <td class="num">${waitNyuko > 0 ? waitNyuko : '-'}</td>
+      <td class="num">${bGrade || '-'}</td>
+      <td class="num">${rejected || '-'}</td>
+      <td class="num">${nyukoTotal || '-'}</td>
+      <td class="num">${tanaoroshi !== null ? tanaoroshi : '-'}</td>
+      <td class="num">${hanbai || '-'}</td>
+    </tr>`;
+  });
+
+  if (!tbody) {
+    tbody = '<tr><td colspan="14" style="text-align:center; color:#86868b; padding:24px;">データがありません。生産予定数を入力するか、記録を追加してください。</td></tr>';
+  }
+
+  table.querySelector('thead').innerHTML = thead;
+  table.querySelector('tbody').innerHTML = tbody;
+}
+
+// ===== インライン編集 =====
+function editPlanCell(td, sku, field, currentValue) {
+  // Already editing
+  if (td.querySelector('input')) return;
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.value = currentValue || '';
+  input.min = 0;
+  td.textContent = '';
+  td.appendChild(input);
+  input.focus();
+  input.select();
+
+  function save() {
+    const val = parseInt(input.value) || 0;
+    const plans = loadPlans();
+    if (!plans[sku]) plans[sku] = {};
+    plans[sku][field] = val;
+    savePlans(plans);
+    refreshZentaiTable();
+  }
+
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { refreshZentaiTable(); }
+  });
+}
+
+// ===== 棚卸シート (monthly matrix) =====
+function refreshTanaoroshiSheet() {
+  const table = document.getElementById('tana-sheet-table');
+  if (!table) return;
+
+  const allSKUs = generateAllSKUs();
+  const tanaRecords = state.records.filter(r => r.type === '棚卸し');
+
+  if (tanaRecords.length === 0) {
+    table.querySelector('thead').innerHTML = '';
+    table.querySelector('tbody').innerHTML = '<tr><td style="text-align:center; color:#86868b; padding:24px;">棚卸しデータがありません。</td></tr>';
+    return;
+  }
+
+  // Collect all months that have tanaoroshi data
+  const monthSet = new Set();
+  tanaRecords.forEach(r => {
+    const d = new Date(r.date);
+    const m = d.getFullYear() + '/' + (d.getMonth() + 1);
+    monthSet.add(m);
+  });
+  const months = [...monthSet].sort((a, b) => {
+    const [ay, am] = a.split('/').map(Number);
+    const [by, bm] = b.split('/').map(Number);
+    return ay !== by ? ay - by : am - bm;
+  });
+
+  // Group tana data: per SKU per month (latest record per month)
+  const tanaMap = {}; // sku -> month -> { quantity, bGrade }
+  tanaRecords.forEach(r => {
+    const key = r.product + '_' + (r.color || '');
+    const d = new Date(r.date);
+    const m = d.getFullYear() + '/' + (d.getMonth() + 1);
+    if (!tanaMap[key]) tanaMap[key] = {};
+    if (!tanaMap[key][m] || r.date > tanaMap[key][m].date) {
+      tanaMap[key][m] = { quantity: r.quantity || 0, bGrade: r.bGrade || 0, date: r.date };
+    }
+  });
+
+  // Build table
+  let thead = '<tr><th>SKU</th>';
+  months.forEach(m => { thead += `<th>${m}</th>`; });
+  thead += '</tr>';
+
+  let tbody = '';
+  allSKUs.forEach(s => {
+    const data = tanaMap[s.sku];
+    if (!data) return; // skip SKUs without tanaoroshi data
+    tbody += `<tr><td style="text-align:left; font-weight:600;">${s.sku}</td>`;
+    months.forEach(m => {
+      const val = data[m];
+      if (val) {
+        const bLabel = val.bGrade > 0 ? `<br><span style="color:#ff9500; font-size:10px;">B:${val.bGrade}</span>` : '';
+        tbody += `<td>${val.quantity}${bLabel}</td>`;
+      } else {
+        tbody += '<td>-</td>';
+      }
+    });
+    tbody += '</tr>';
+  });
+
+  if (!tbody) {
+    tbody = '<tr><td colspan="' + (months.length + 1) + '" style="text-align:center; color:#86868b; padding:24px;">該当データがありません</td></tr>';
+  }
+
+  table.querySelector('thead').innerHTML = thead;
+  table.querySelector('tbody').innerHTML = tbody;
+}
+
+// ===== 販売数計算ロジック =====
+function calcHanbaiData() {
+  const tanaRecords = state.records.filter(r => r.type === '棚卸し');
+  const nyukoRecords = state.records.filter(r => r.type === '入庫');
+
+  // Collect months with tanaoroshi data
+  const monthSet = new Set();
+  tanaRecords.forEach(r => {
+    const d = new Date(r.date);
+    monthSet.add(d.getFullYear() + '/' + (d.getMonth() + 1));
+  });
+  const months = [...monthSet].sort((a, b) => {
+    const [ay, am] = a.split('/').map(Number);
+    const [by, bm] = b.split('/').map(Number);
+    return ay !== by ? ay - by : am - bm;
+  });
+
+  if (months.length < 2) return { months: months, skuData: {}, totals: {} };
+
+  // Build tanaoroshi map: sku -> month -> quantity (latest per month)
+  const tanaMap = {};
+  tanaRecords.forEach(r => {
+    const key = r.product + '_' + (r.color || '');
+    const d = new Date(r.date);
+    const m = d.getFullYear() + '/' + (d.getMonth() + 1);
+    if (!tanaMap[key]) tanaMap[key] = {};
+    if (!tanaMap[key][m] || r.date > tanaMap[key][m].date) {
+      tanaMap[key][m] = { quantity: r.quantity || 0, date: r.date };
+    }
+  });
+
+  // Build nyuko map: sku -> month -> total quantity
+  const nyukoMap = {};
+  nyukoRecords.forEach(r => {
+    const key = r.product + '_' + (r.color || '');
+    const d = new Date(r.date);
+    const m = d.getFullYear() + '/' + (d.getMonth() + 1);
+    if (!nyukoMap[key]) nyukoMap[key] = {};
+    nyukoMap[key][m] = (nyukoMap[key][m] || 0) + (r.quantity || 0);
+  });
+
+  // Calculate sales per SKU per month
+  // 販売数 = 前月棚卸 + 当月入庫 - 当月棚卸
+  const skuData = {}; // sku -> { months: { month: value }, total: N }
+  const totals = {};
+
+  Object.keys(tanaMap).forEach(sku => {
+    skuData[sku] = { monthValues: {}, total: 0 };
+    for (let i = 1; i < months.length; i++) {
+      const prevMonth = months[i - 1];
+      const currMonth = months[i];
+      const prevTana = tanaMap[sku] && tanaMap[sku][prevMonth] ? tanaMap[sku][prevMonth].quantity : null;
+      const currTana = tanaMap[sku] && tanaMap[sku][currMonth] ? tanaMap[sku][currMonth].quantity : null;
+      if (prevTana === null || currTana === null) continue;
+      const currNyuko = (nyukoMap[sku] && nyukoMap[sku][currMonth]) || 0;
+      const sales = prevTana + currNyuko - currTana;
+      skuData[sku].monthValues[currMonth] = sales;
+      skuData[sku].total += sales;
+    }
+    totals[sku] = skuData[sku].total;
+  });
+
+  return { months, skuData, totals };
+}
+
+// ===== 販売数テーブル =====
+function refreshHanbaiSheet() {
+  const table = document.getElementById('hanbai-table');
+  if (!table) return;
+
+  const hanbai = calcHanbaiData();
+  const months = hanbai.months;
+
+  if (months.length < 2) {
+    table.querySelector('thead').innerHTML = '';
+    table.querySelector('tbody').innerHTML = '<tr><td style="text-align:center; color:#86868b; padding:24px;">販売数の計算には少なくとも2ヶ月分の棚卸しデータが必要です。</td></tr>';
+    return;
+  }
+
+  // Only show months from index 1 onward (sales are calculated from month[1])
+  const salesMonths = months.slice(1);
+
+  let thead = '<tr><th>SKU</th><th>販売総数</th>';
+  salesMonths.forEach(m => { thead += `<th>${m}</th>`; });
+  thead += '</tr>';
+
+  let tbody = '';
+  const allSKUs = generateAllSKUs();
+  allSKUs.forEach(s => {
+    const data = hanbai.skuData[s.sku];
+    if (!data || data.total === 0) return;
+    tbody += `<tr><td style="text-align:left; font-weight:600;">${s.sku}</td>`;
+    tbody += `<td style="font-weight:700;">${data.total}</td>`;
+    salesMonths.forEach(m => {
+      const v = data.monthValues[m];
+      tbody += `<td>${v !== undefined ? v : '-'}</td>`;
+    });
+    tbody += '</tr>';
+  });
+
+  if (!tbody) {
+    tbody = '<tr><td colspan="' + (salesMonths.length + 2) + '" style="text-align:center; color:#86868b; padding:24px;">販売データがありません</td></tr>';
+  }
+
+  table.querySelector('thead').innerHTML = thead;
+  table.querySelector('tbody').innerHTML = tbody;
+}
+
+// ===== refreshMeguDash を拡張 =====
+const _origRefreshMeguDash = refreshMeguDash;
+refreshMeguDash = function() {
+  _origRefreshMeguDash();
+  // Also refresh the currently active tab
+  const activeTab = document.querySelector('#screen-dash-megu .dash-tab-content.active');
+  if (activeTab) {
+    if (activeTab.id === 'dash-tab-zentai') refreshZentaiTable();
+    if (activeTab.id === 'dash-tab-tanaoroshi-sheet') refreshTanaoroshiSheet();
+    if (activeTab.id === 'dash-tab-hanbai') refreshHanbaiSheet();
+  }
+};
+
+// 起動
+init();
+</script>
+</body>
+</html>
