@@ -423,7 +423,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <!-- Tab 1: 全体管理 -->
     <div class="dash-tab-content active" id="dash-tab-zentai">
       <div class="table-scroll-wrapper">
-        <table class="zentai-table" id="zentai-table">
+        <table class="zentai-table" id="zentai-table" style="min-width:auto; width:100%;">
           <thead></thead>
           <tbody></tbody>
         </table>
@@ -3777,23 +3777,63 @@ function generateAllSKUs() {
 }
 
 // ===== 14-column 全体管理テーブル =====
+// 材料信号: パーツ在庫と生産目標を照合
+function getMaterialSignal(sku, skuGroup, colorCode, target) {
+  if (target <= 0) return { signal: 'blue', label: '―' };
+
+  const partsRecords = state.records.filter(r => r.type === 'パーツ棚卸し');
+  if (partsRecords.length === 0) return { signal: 'gray', label: '?' };
+
+  // 最新パーツ在庫を取得
+  const latest = {};
+  partsRecords.forEach(r => {
+    const key = `${r.category}_${r.partCode}`;
+    if (!latest[key] || r.date > latest[key].date) latest[key] = r;
+  });
+
+  // このSKUに関連するパーツを探す
+  const relatedParts = Object.values(latest).filter(r => {
+    if (!r.skuGroup) return false;
+    // SKUグループが一致
+    if (r.skuGroup === skuGroup) {
+      // FA/FC はカラー別 → パーツ名にカラーコードが含まれるか確認
+      if (r.category === 'FA' || r.category === 'FC') {
+        return r.partName && (r.partName.includes('_' + colorCode) || r.partName.endsWith('_' + colorCode));
+      }
+      return true; // FB/H/B は全色共通
+    }
+    return false;
+  });
+
+  if (relatedParts.length === 0) return { signal: 'gray', label: '?' };
+
+  let minRatio = Infinity;
+  relatedParts.forEach(p => {
+    const ratio = p.quantity / target;
+    if (ratio < minRatio) minRatio = ratio;
+  });
+
+  if (minRatio >= 1) return { signal: 'blue', label: '◎' };
+  if (minRatio > 0) return { signal: 'yellow', label: '△' };
+  return { signal: 'red', label: '✕' };
+}
+
 function refreshZentaiTable() {
   const table = document.getElementById('zentai-table');
   if (!table) return;
 
   const allSKUs = generateAllSKUs();
-  const plans = loadPlans();
   const records = state.records;
 
-  // Aggregate records per SKU (productCode + colorCode)
+  // Aggregate records per SKU
   const agg = {};
-  allSKUs.forEach(s => { agg[s.sku] = { mochidashi: 0, nouhin: 0, kenpinOk: 0, kenpinB: 0, kenpinRejected: 0, nyukoQty: 0, nyukoB: 0, tanaoroshi: null, tanaDate: '' }; });
+  allSKUs.forEach(s => { agg[s.sku] = { mochidashi: 0, nouhin: 0, kenpinOk: 0, kenpinB: 0, kenpinRejected: 0, nyukoQty: 0, nyukoB: 0 }; });
 
   records.forEach(r => {
     const key = r.product + '_' + (r.color || '');
-    if (!agg[key]) return; // skip unknown SKUs
+    if (!agg[key]) return;
     if (r.type === '持ち出し') agg[key].mochidashi += (r.quantity || 0);
-    if (r.type === '納品') agg[key].nouhin += (r.quantity || r.quantityOk || 0);
+    if (r.type === '納品') agg[key].nouhin += (r.quantityOk || r.quantity || 0);
     if (r.type === '検品完了') {
       agg[key].kenpinOk += (r.quantityOk || r.quantity || 0);
       agg[key].kenpinB += (r.bGrade || 0);
@@ -3803,60 +3843,90 @@ function refreshZentaiTable() {
       agg[key].nyukoQty += (r.quantity || 0);
       agg[key].nyukoB += (r.bGrade || 0);
     }
-    if (r.type === '棚卸し') {
-      if (!agg[key].tanaDate || r.date > agg[key].tanaDate) {
-        agg[key].tanaoroshi = (r.quantity || 0);
-        agg[key].tanaDate = r.date;
-      }
-    }
   });
 
-  // Calculate sales from hanbai logic
   const hanbaiData = calcHanbaiData();
 
+  // 生産目標データをSKU→target のマップに(生産グループ単位)
+  const targetMap = {};
+  if (typeof PRODUCTION_TARGET_DATA !== 'undefined') {
+    PRODUCTION_TARGET_DATA.forEach(d => {
+      // pgからhinbanとcolorCodeを取得
+      targetMap[d.pg] = d.target || 0;
+    });
+  }
+
+  // 信号色のスタイル
+  const signalStyles = {
+    blue: 'background:#007aff; color:white;',
+    yellow: 'background:#ff9500; color:white;',
+    red: 'background:#ff3b30; color:white;',
+    gray: 'background:#e5e5ea; color:#86868b;'
+  };
+
   // Build table
-  let thead = '<tr><th>SKU</th><th>グループ</th><th>カラー</th><th>生産予定数</th><th>縫製発注残</th><th>2025実績</th><th>縫製中</th><th>納品済</th><th>入庫待ち</th><th>B品</th><th>不可</th><th>入庫総数</th><th>棚卸在庫</th><th>販売数</th></tr>';
+  let thead = '<tr>';
+  thead += '<th style="text-align:left; padding:4px 6px;">SKU</th>';
+  thead += '<th style="width:60px; padding:4px;">進捗</th>';
+  thead += '<th style="width:28px; padding:4px; font-size:10px;">縫製</th>';
+  thead += '<th style="width:28px; padding:4px; font-size:10px;">入待</th>';
+  thead += '<th style="width:28px; padding:4px; font-size:10px;">入庫</th>';
+  thead += '<th style="width:28px; padding:4px; font-size:10px;">販売</th>';
+  thead += '<th style="width:22px; padding:4px; font-size:10px;">B</th>';
+  thead += '<th style="width:22px; padding:4px; font-size:10px;">✕</th>';
+  thead += '<th style="width:26px; padding:4px; font-size:10px;">材料</th>';
+  thead += '</tr>';
+
   let tbody = '';
 
   allSKUs.forEach(s => {
     const a = agg[s.sku];
-    const plan = plans[s.sku] || {};
-    const planned = plan.planned || 0;
-    const actual2025 = plan.actual2025 || 0;
-    const sewing = a.mochidashi - a.nouhin; // 縫製中
-    const delivered = a.nouhin; // 納品済
-    const sewingRemain = planned - (Math.max(0, sewing) + delivered); // 縫製発注残
-    const waitNyuko = (a.kenpinOk + a.kenpinB) - a.nyukoQty - a.nyukoB; // 入庫待ち
-    const bGrade = a.kenpinB + a.nyukoB; // B品
-    const rejected = a.kenpinRejected; // 不可
-    const nyukoTotal = a.nyukoQty; // 入庫総数（A品のみ）
-    const tanaoroshi = a.tanaoroshi;
+    const sewing = Math.max(0, a.mochidashi - a.nouhin);
+    const waitNyuko = Math.max(0, (a.kenpinOk + a.kenpinB) - a.nyukoQty - a.nyukoB);
+    const bGrade = a.kenpinB + a.nyukoB;
+    const rejected = a.kenpinRejected;
+    const nyukoTotal = a.nyukoQty;
     const hanbai = hanbaiData.totals[s.sku] || 0;
 
-    // Only show rows with any data
-    const hasData = planned || actual2025 || a.mochidashi || a.nouhin || a.kenpinOk || a.kenpinB || a.kenpinRejected || a.nyukoQty || a.nyukoB || tanaoroshi !== null || hanbai;
+    // 生産目標を取得（生産グループから）
+    const pg = s.sku; // 基本は SKU = PG
+    const target = targetMap[pg] || 0;
+
+    // データがある行のみ表示
+    const hasData = target || a.mochidashi || a.nouhin || a.kenpinOk || a.kenpinB || a.kenpinRejected || a.nyukoQty || hanbai;
     if (!hasData) return;
 
-    tbody += `<tr>
-      <td style="font-weight:600; text-align:left;">${s.sku}</td>
-      <td>${s.skuGroup}</td>
-      <td style="text-align:left;">${s.colorName}</td>
-      <td class="editable-cell" onclick="editPlanCell(this,'${s.sku}','planned',${planned})">${planned || '-'}</td>
-      <td class="num">${planned ? sewingRemain : '-'}</td>
-      <td class="editable-cell" onclick="editPlanCell(this,'${s.sku}','actual2025',${actual2025})">${actual2025 || '-'}</td>
-      <td class="num">${sewing > 0 ? sewing : (sewing < 0 ? sewing : '-')}</td>
-      <td class="num">${delivered || '-'}</td>
-      <td class="num">${waitNyuko > 0 ? waitNyuko : '-'}</td>
-      <td class="num">${bGrade || '-'}</td>
-      <td class="num">${rejected || '-'}</td>
-      <td class="num">${nyukoTotal || '-'}</td>
-      <td class="num">${tanaoroshi !== null ? tanaoroshi : '-'}</td>
-      <td class="num">${hanbai || '-'}</td>
-    </tr>`;
+    // 進捗バー
+    const pct = target > 0 ? Math.min(100, Math.round(nyukoTotal / target * 100)) : 0;
+    const barColor = pct >= 100 ? '#34c759' : pct > 0 ? '#ff9500' : '#e5e5ea';
+    let progressHtml = '';
+    if (target > 0) {
+      progressHtml = '<div class="progress-bar-bg" style="height:4px; border-radius:2px; margin-bottom:2px;">';
+      progressHtml += '<div style="height:4px; border-radius:2px; background:' + barColor + '; width:' + pct + '%;"></div></div>';
+      progressHtml += '<div style="font-size:10px; color:#86868b;">' + nyukoTotal + '/' + target + '</div>';
+    } else {
+      progressHtml = '<span style="font-size:10px; color:#86868b;">―</span>';
+    }
+
+    // 材料信号
+    const mat = getMaterialSignal(s.sku, s.skuGroup, s.colorCode, target);
+    const matStyle = signalStyles[mat.signal] || signalStyles.gray;
+
+    tbody += '<tr>';
+    tbody += '<td style="text-align:left; padding:4px 6px;"><div style="font-weight:600; font-size:12px;">' + s.sku + '</div><div style="font-size:10px; color:#86868b;">' + s.colorName + '</div></td>';
+    tbody += '<td style="padding:4px;">' + progressHtml + '</td>';
+    tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (sewing || '-') + '</td>';
+    tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (waitNyuko || '-') + '</td>';
+    tbody += '<td class="num" style="padding:4px; font-size:12px; font-weight:600;">' + (nyukoTotal || '-') + '</td>';
+    tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (hanbai || '-') + '</td>';
+    tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff9500;">' + (bGrade || '-') + '</td>';
+    tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff3b30;">' + (rejected || '-') + '</td>';
+    tbody += '<td style="padding:4px; text-align:center;"><span style="display:inline-block; width:20px; height:20px; border-radius:50%; line-height:20px; text-align:center; font-size:10px; ' + matStyle + '">' + mat.label + '</span></td>';
+    tbody += '</tr>';
   });
 
   if (!tbody) {
-    tbody = '<tr><td colspan="14" style="text-align:center; color:#86868b; padding:24px;">データがありません。生産予定数を入力するか、記録を追加してください。</td></tr>';
+    tbody = '<tr><td colspan="9" style="text-align:center; color:#86868b; padding:24px;">データがありません</td></tr>';
   }
 
   table.querySelector('thead').innerHTML = thead;
