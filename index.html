@@ -3778,45 +3778,94 @@ function generateAllSKUs() {
 
 // ===== 14-column 全体管理テーブル =====
 // 材料信号: パーツ在庫と生産目標を照合
+const CATEGORY_LABELS_MAT = { 'FA': '表地', 'FB': '裏地', 'FC': 'ポケット', 'H': 'テープ', 'B': '副資材' };
+
 function getMaterialSignal(sku, skuGroup, colorCode, target) {
-  if (target <= 0) return { signal: 'blue', label: '―' };
+  if (target <= 0) return { signal: 'blue', label: '―', parts: [] };
 
   const partsRecords = state.records.filter(r => r.type === 'パーツ棚卸し');
-  if (partsRecords.length === 0) return { signal: 'gray', label: '?' };
+  if (partsRecords.length === 0) return { signal: 'gray', label: '?', parts: [] };
 
-  // 最新パーツ在庫を取得
   const latest = {};
   partsRecords.forEach(r => {
     const key = `${r.category}_${r.partCode}`;
     if (!latest[key] || r.date > latest[key].date) latest[key] = r;
   });
 
-  // このSKUに関連するパーツを探す
-  // skuGroup がスラッシュ区切り（例: "APS/DO/CL/KM"）の場合にも対応
   const relatedParts = Object.values(latest).filter(r => {
     if (!r.skuGroup) return false;
     const groups = r.skuGroup.split('/');
     if (!groups.includes(skuGroup)) return false;
-    // FA/FC はカラー別 → パーツ名にカラーコードが含まれるか確認
     if (r.category === 'FA' || r.category === 'FC') {
       if (!r.partName) return false;
-      // パーツ名末尾がカラーコードで終わる、またはカラー名を含む
       return r.partName.endsWith('_' + colorCode) || r.partName.includes('_' + colorCode + '_');
     }
-    return true; // FB/H/B は全色共通
+    return true;
   });
 
-  if (relatedParts.length === 0) return { signal: 'gray', label: '?' };
+  if (relatedParts.length === 0) return { signal: 'gray', label: '?', parts: [] };
 
   let minRatio = Infinity;
-  relatedParts.forEach(p => {
-    const ratio = p.quantity / target;
+  const partsDetail = relatedParts.map(p => {
+    const ratio = target > 0 ? p.quantity / target : 999;
     if (ratio < minRatio) minRatio = ratio;
+    const status = p.quantity === 0 ? 'red' : p.quantity < target ? 'yellow' : 'ok';
+    return { cat: CATEGORY_LABELS_MAT[p.category] || p.category, name: p.partName, qty: p.quantity, need: target, status: status };
   });
 
-  if (minRatio >= 1) return { signal: 'blue', label: '◎' };
-  if (minRatio > 0) return { signal: 'yellow', label: '△' };
-  return { signal: 'red', label: '✕' };
+  let signal, label;
+  if (minRatio >= 1) { signal = 'blue'; label = '◎'; }
+  else if (minRatio > 0) { signal = 'yellow'; label = '△'; }
+  else { signal = 'red'; label = '✕'; }
+
+  return { signal, label, parts: partsDetail };
+}
+
+// 材料詳細モーダル
+function showMaterialDetail(sku, partsJson) {
+  const parts = JSON.parse(decodeURIComponent(partsJson));
+  let html = '<div style="font-weight:700; font-size:15px; margin-bottom:12px;">' + sku + ' の材料</div>';
+
+  if (parts.length === 0) {
+    html += '<div style="color:#86868b;">パーツデータがありません</div>';
+  } else {
+    parts.forEach(p => {
+      const color = p.status === 'red' ? '#ff3b30' : p.status === 'yellow' ? '#ff9500' : '#34c759';
+      const icon = p.status === 'red' ? '✕' : p.status === 'yellow' ? '△' : '◎';
+      const shortage = p.need - p.qty;
+      html += '<div style="padding:8px 0; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; gap:8px;">';
+      html += '<span style="display:inline-block; width:22px; height:22px; border-radius:50%; line-height:22px; text-align:center; font-size:11px; background:' + color + '; color:white;">' + icon + '</span>';
+      html += '<div style="flex:1; min-width:0;">';
+      html += '<div style="font-size:13px; font-weight:600;">' + p.cat + '</div>';
+      html += '<div style="font-size:11px; color:#86868b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + p.name + '</div>';
+      html += '</div>';
+      html += '<div style="text-align:right; white-space:nowrap;">';
+      html += '<div style="font-size:14px; font-weight:700; color:' + color + ';">' + p.qty + ' / ' + p.need + '</div>';
+      if (p.status !== 'ok') html += '<div style="font-size:10px; color:#ff3b30;">不足 ' + shortage + '</div>';
+      html += '</div></div>';
+    });
+  }
+
+  html += '<div style="margin-top:16px; text-align:center;">';
+  html += '<button onclick="closeMaterialDetail()" style="background:#007aff; color:white; border:none; border-radius:8px; padding:10px 32px; font-size:14px; cursor:pointer;">とじる</button>';
+  html += '</div>';
+
+  // モーダル表示
+  let overlay = document.getElementById('material-detail-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'material-detail-overlay';
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); z-index:999; display:flex; align-items:flex-start; justify-content:center; padding:60px 20px 20px;';
+    overlay.onclick = function(e) { if (e.target === overlay) closeMaterialDetail(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = '<div style="background:white; border-radius:16px; padding:20px; max-width:340px; width:100%; max-height:80vh; overflow-y:auto;">' + html + '</div>';
+  overlay.style.display = 'flex';
+}
+
+function closeMaterialDetail() {
+  const overlay = document.getElementById('material-detail-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 function refreshZentaiTable() {
@@ -3922,7 +3971,10 @@ function refreshZentaiTable() {
     tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (hanbai || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff9500;">' + (bGrade || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff3b30;">' + (rejected || '-') + '</td>';
-    tbody += '<td style="padding:4px; text-align:center;"><span style="display:inline-block; width:20px; height:20px; border-radius:50%; line-height:20px; text-align:center; font-size:10px; ' + matStyle + '">' + mat.label + '</span></td>';
+    const partsData = encodeURIComponent(JSON.stringify(mat.parts));
+    const clickable = mat.parts.length > 0 ? ' cursor:pointer;' : '';
+    const onclick = mat.parts.length > 0 ? ' onclick="showMaterialDetail(\'' + s.sku + '\',\'' + partsData + '\')"' : '';
+    tbody += '<td style="padding:4px; text-align:center;"><span' + onclick + ' style="display:inline-block; width:20px; height:20px; border-radius:50%; line-height:20px; text-align:center; font-size:10px;' + clickable + ' ' + matStyle + '">' + mat.label + '</span></td>';
     tbody += '</tr>';
   });
 
