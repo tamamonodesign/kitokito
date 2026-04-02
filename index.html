@@ -473,7 +473,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
         <button class="color-btn" onclick="filterParts('B')">B 副資材</button>
       </div>
       <div class="table-scroll-wrapper">
-        <table class="zentai-table" id="parts-stock-table">
+        <table class="zentai-table" id="parts-stock-table" style="min-width:auto; width:100%;">
           <thead></thead>
           <tbody></tbody>
         </table>
@@ -3479,23 +3479,22 @@ function refreshPartsStock() {
 
   const CATEGORY_LABELS = { 'FA': '表地', 'FB': '裏地', 'FC': 'ポケット', 'H': 'ひも・テープ', 'B': '副資材' };
 
-  let thead = '<tr><th>区分</th><th>コード</th><th>パーツ名</th><th>SKUG</th><th style="text-align:right">在庫数</th></tr>';
+  let thead = '<tr><th style="width:36px; padding:4px; font-size:11px;">区分</th><th style="padding:4px;">パーツ</th><th style="width:40px; padding:4px; font-size:11px;">SKU</th><th style="width:32px; padding:4px; text-align:right; font-size:11px;">在庫</th></tr>';
 
   let tbody = '';
   items.forEach(r => {
     const catLabel = CATEGORY_LABELS[r.category] || r.category;
     const qtyClass = r.quantity === 0 ? 'color:#ff3b30; font-weight:600;' : '';
     tbody += `<tr>`;
-    tbody += `<td><span class="badge ${r.quantity > 0 ? 'green' : 'red'}">${catLabel}</span></td>`;
-    tbody += `<td>${r.partCode || ''}</td>`;
-    tbody += `<td style="text-align:left;">${r.partName || ''}</td>`;
-    tbody += `<td>${r.skuGroup || ''}</td>`;
-    tbody += `<td class="num" style="${qtyClass}">${r.quantity}</td>`;
+    tbody += `<td style="padding:4px;"><span class="badge ${r.quantity > 0 ? 'green' : 'red'}" style="font-size:10px; padding:1px 4px;">${catLabel}</span></td>`;
+    tbody += `<td style="text-align:left; padding:4px;"><div style="font-size:12px; font-weight:600;">${r.partName || ''}</div><div style="font-size:10px; color:#86868b;">${r.partCode || ''}</div></td>`;
+    tbody += `<td style="padding:4px; font-size:10px;">${r.skuGroup || ''}</td>`;
+    tbody += `<td class="num" style="padding:4px; ${qtyClass}">${r.quantity}</td>`;
     tbody += `</tr>`;
   });
 
   if (!tbody) {
-    tbody = '<tr><td colspan="5" style="text-align:center; color:#86868b; padding:24px;">該当データがありません</td></tr>';
+    tbody = '<tr><td colspan="4" style="text-align:center; color:#86868b; padding:24px;">該当データがありません</td></tr>';
   }
 
   table.querySelector('thead').innerHTML = thead;
