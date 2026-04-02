@@ -3792,17 +3792,18 @@ function getMaterialSignal(sku, skuGroup, colorCode, target) {
   });
 
   // このSKUに関連するパーツを探す
+  // skuGroup がスラッシュ区切り（例: "APS/DO/CL/KM"）の場合にも対応
   const relatedParts = Object.values(latest).filter(r => {
     if (!r.skuGroup) return false;
-    // SKUグループが一致
-    if (r.skuGroup === skuGroup) {
-      // FA/FC はカラー別 → パーツ名にカラーコードが含まれるか確認
-      if (r.category === 'FA' || r.category === 'FC') {
-        return r.partName && (r.partName.includes('_' + colorCode) || r.partName.endsWith('_' + colorCode));
-      }
-      return true; // FB/H/B は全色共通
+    const groups = r.skuGroup.split('/');
+    if (!groups.includes(skuGroup)) return false;
+    // FA/FC はカラー別 → パーツ名にカラーコードが含まれるか確認
+    if (r.category === 'FA' || r.category === 'FC') {
+      if (!r.partName) return false;
+      // パーツ名末尾がカラーコードで終わる、またはカラー名を含む
+      return r.partName.endsWith('_' + colorCode) || r.partName.includes('_' + colorCode + '_');
     }
-    return false;
+    return true; // FB/H/B は全色共通
   });
 
   if (relatedParts.length === 0) return { signal: 'gray', label: '?' };
@@ -3908,8 +3909,8 @@ function refreshZentaiTable() {
       progressHtml = '<span style="font-size:10px; color:#86868b;">―</span>';
     }
 
-    // 材料信号
-    const mat = getMaterialSignal(s.sku, s.skuGroup, s.colorCode, target);
+    // 材料信号（productCode = LBL等サイズ込みコードで照合）
+    const mat = getMaterialSignal(s.sku, s.productCode, s.colorCode, target);
     const matStyle = signalStyles[mat.signal] || signalStyles.gray;
 
     tbody += '<tr>';
