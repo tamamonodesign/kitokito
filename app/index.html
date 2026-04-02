@@ -377,7 +377,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     </div>
 
     <div class="form-section">
-      <h3>数量（表地の枚数）</h3>
+      <h3 id="qty-label">数量（表地の枚数）</h3>
       <div class="qty-control">
         <button class="qty-btn minus" onclick="changeQty(-1)">−</button>
         <input type="number" class="qty-input" id="qty-input" min="1" value="5" onchange="syncQtyFromInput('mochidashi')">
@@ -1921,7 +1921,7 @@ const PRODUCTS = [
   { code: 'TA', name: '体操着袋', sizes: ['TAL', 'TAM'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/5cf091d248a20ad46f03d6bbeee04f70.jpg',
     colors: ['BK ブラック', 'BL ブルー', 'BE ベージュ', 'PK ピンク', 'GY グレー', 'LA ラベンダー'],
     parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'ループエンド ×2', 'テープ ×1', 'ひも ×2'] },
-  { code: 'SNAP', name: 'ナップサック', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/679c9390395bb757711385ded85e6842.jpg',
+  { code: 'SNAP', name: 'ナップサック', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/b5c7143dda73fc516f4e7b105a999507.jpg',
     colors: ['KH カーキ', 'NA ネイビー'],
     parts: ['表地 ×1', '裏地 ×1', 'お名前タグ ×1', 'ひも ×2', 'ベルト ×3'] },
   { code: 'PNAP', name: 'プチナップサック', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/679c9390395bb757711385ded85e6842.jpg',
@@ -1933,15 +1933,27 @@ const PRODUCTS = [
   { code: 'FB', name: 'フリルバッグ', sizes: ['FBM', 'FBOL'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/3906b6e6b1c21bca777b164683a42a4b.jpg',
     colors: ['AP メローアプリコット', 'BL ラムネブルー', 'LE レモンクリーム'],
     parts: ['表地 ×1', '裏地 ×1', 'ポケット ×1', '持ち手 ×2', 'ひも ×4', 'タグ ×1', 'お名前タグ ×1'] },
-  { code: 'OMM', name: 'おむつ入れ', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/ef5a9ce0af40cf64bcd1453844762aa4.jpg',
+  { code: 'OMM', name: 'おむつ入れ', img: 'https://tshop.r10s.jp/hnds/cabinet/om/imgrc0121041581.jpg',
     colors: ['BK ブラック', 'GY グレー'],
     parts: ['表地 ×1', '裏地 ×1', 'ループエンド ×2', 'テープ ×1', 'ひも ×2'] },
   { code: 'IB', name: 'イラストバッグ', sizes: ['IBL', 'IBM', 'IBSS'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/ef5a9ce0af40cf64bcd1453844762aa4.jpg',
     colors: ['KI 生成'],
     parts: ['表地 ×1', '裏地 ×1', 'ポケット ×1', 'お名前タグ ×1', '持ち手ベルト ×2'] },
-  { code: 'MASK', name: 'マスクカバー', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/ef5a9ce0af40cf64bcd1453844762aa4.jpg',
+  { code: 'MASK', name: 'マスクカバー', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/b923f218687cf4b5d43e46c3421809c0.jpg',
     colors: ['N ノーマル', 'W ワイド'],
     parts: ['表地 ×1', 'スナップボタン ×2'] },
+];
+
+// パーツ制作（内職用）
+const PARTS_PRODUCTS = [
+  { code: 'K001', name: 'SBD用Dカン', isParts: true,
+    parts: ['30mmベルト ×1', 'Dカン30mm ×1'] },
+  { code: 'K002', name: 'バッグ・ショルダー用Dカン', isParts: true,
+    parts: ['20mmベルト ×1', 'Dカン20mm ×1'] },
+  { code: 'K003', name: 'ショルダーベルト', isParts: true,
+    parts: ['30mmベルト120cm ×1', 'ナスカン ×2', 'ベルト30mm ×1'] },
+  { code: 'K004', name: 'ナップサックベルト', isParts: true,
+    parts: ['30mmベルト（ヒートカット）×1', 'スナップBK ×2', 'スナップ凸 ×1', 'スナップ凹 ×1'] },
 ];
 
 // プリント・入庫用のフラット商品リスト（持ち出し・納品と同じPRODUCTSを使う）
@@ -2002,6 +2014,22 @@ function init() {
     card.onclick = () => selectProduct(p);
     card.innerHTML = `<img src="${p.img}" alt="${p.name}" loading="lazy"><div class="label">${p.code}<br>${p.name}</div>`;
     grid.appendChild(card);
+  });
+
+  // パーツ制作セクション
+  const partsSection = document.createElement('div');
+  partsSection.innerHTML = '<div style="font-size:14px; font-weight:600; color:#86868b; margin:20px 0 10px; border-top:1px solid #e5e5ea; padding-top:16px;">🔧 パーツ制作</div>';
+  grid.parentNode.insertBefore(partsSection, grid.nextSibling);
+  const partsGrid = document.createElement('div');
+  partsGrid.className = 'product-grid';
+  partsSection.appendChild(partsGrid);
+  PARTS_PRODUCTS.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.style.cssText = 'padding:16px 12px; text-align:center; cursor:pointer;';
+    card.onclick = () => selectProduct(p);
+    card.innerHTML = `<div style="font-size:28px; margin-bottom:6px;">🔩</div><div class="label">${p.code}<br>${p.name}</div>`;
+    partsGrid.appendChild(card);
   });
 }
 
@@ -2082,23 +2110,32 @@ function selectProduct(product) {
 
 function openInputScreen(product) {
   state.selectedProduct = product;
-  state.selectedColor = '';
+  state.selectedColor = product.isParts ? 'なし' : '';
   state.quantity = 5;
   state.checkedParts = new Set();
 
   document.getElementById('selected-product-name').textContent = `${product.code} ${product.name}`;
   document.getElementById('qty-input').value = state.quantity;
 
-  // カラーボタン
+  // 数量ラベル
+  document.getElementById('qty-label').textContent = product.isParts ? '数量（セット数）' : '数量（表地の枚数）';
+
+  // カラーセクション：パーツ制作の場合は非表示
+  const colorSection = document.getElementById('color-buttons').parentNode;
   const colorGrid = document.getElementById('color-buttons');
   colorGrid.innerHTML = '';
-  product.colors.forEach(c => {
-    const btn = document.createElement('button');
-    btn.className = 'color-btn';
-    btn.textContent = c;
-    btn.onclick = () => selectColor(c, btn);
-    colorGrid.appendChild(btn);
-  });
+  if (product.isParts) {
+    colorSection.style.display = 'none';
+  } else {
+    colorSection.style.display = '';
+    product.colors.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'color-btn';
+      btn.textContent = c;
+      btn.onclick = () => selectColor(c, btn);
+      colorGrid.appendChild(btn);
+    });
+  }
 
   // パーツリスト
   const partsList = document.getElementById('parts-list');
@@ -2162,7 +2199,8 @@ function updateSubmitBtn() {
     btn.textContent = 'パーツを全て確認してください';
     btn.className = 'submit-btn not-ready';
   } else {
-    btn.textContent = `送信する ✅ ${state.selectedProduct.code} ${state.selectedColor} ×${state.quantity}`;
+    const colorText = state.selectedProduct.isParts ? '' : ` ${state.selectedColor}`;
+    btn.textContent = `送信する ✅ ${state.selectedProduct.code}${colorText} ×${state.quantity}`;
     btn.className = 'submit-btn ready';
   }
 }
@@ -2223,6 +2261,24 @@ function selectNouhinName(name) {
     card.innerHTML = `<img src="${p.img}" alt="${p.name}" loading="lazy"><div class="label">${p.code}<br>${p.name}</div>`;
     grid.appendChild(card);
   });
+  // パーツ制作セクション
+  const existingPartsSection = grid.parentNode.querySelector('.nouhin-parts-section');
+  if (existingPartsSection) existingPartsSection.remove();
+  const partsSection = document.createElement('div');
+  partsSection.className = 'nouhin-parts-section';
+  partsSection.innerHTML = '<div style="font-size:14px; font-weight:600; color:#86868b; margin:20px 0 10px; border-top:1px solid #e5e5ea; padding-top:16px;">🔧 パーツ制作</div>';
+  grid.parentNode.insertBefore(partsSection, grid.nextSibling);
+  const partsGrid = document.createElement('div');
+  partsGrid.className = 'product-grid';
+  partsSection.appendChild(partsGrid);
+  PARTS_PRODUCTS.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.style.cssText = 'padding:16px 12px; text-align:center; cursor:pointer;';
+    card.onclick = () => selectNouhinProduct(p);
+    card.innerHTML = `<div style="font-size:28px; margin-bottom:6px;">🔩</div><div class="label">${p.code}<br>${p.name}</div>`;
+    partsGrid.appendChild(card);
+  });
   setTimeout(() => showScreen('screen-nouhin-select-product'), 300);
 }
 
@@ -2266,28 +2322,34 @@ function goBackFromNouhinInput() {
 
 function openNouhinInputScreen(product) {
   nouhinState.product = product;
-  nouhinState.color = '';
+  nouhinState.color = product.isParts ? 'なし' : '';
   nouhinState.quantity = 5;
   nouhinState.checks = new Set();
 
   document.getElementById('nouhin-product-name').textContent = `${product.code} ${product.name}`;
   document.getElementById('nouhin-qty-input').value = nouhinState.quantity;
 
-  // カラーボタン
+  // カラーセクション：パーツ制作の場合は非表示
+  const colorSection = document.getElementById('nouhin-color-buttons').parentNode;
   const colorGrid = document.getElementById('nouhin-color-buttons');
   colorGrid.innerHTML = '';
-  product.colors.forEach(c => {
-    const btn = document.createElement('button');
-    btn.className = 'color-btn';
-    btn.textContent = c;
-    btn.onclick = () => {
-      nouhinState.color = c;
-      document.querySelectorAll('#nouhin-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      updateNouhinBtn();
-    };
-    colorGrid.appendChild(btn);
-  });
+  if (product.isParts) {
+    colorSection.style.display = 'none';
+  } else {
+    colorSection.style.display = '';
+    product.colors.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'color-btn';
+      btn.textContent = c;
+      btn.onclick = () => {
+        nouhinState.color = c;
+        document.querySelectorAll('#nouhin-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        updateNouhinBtn();
+      };
+      colorGrid.appendChild(btn);
+    });
+  }
 
   // チェックリスト
   const list = document.getElementById('nouhin-check-list');
@@ -2323,7 +2385,8 @@ function updateNouhinBtn() {
     btn.textContent = '確認項目をすべてチェックしてください';
     btn.className = 'submit-btn not-ready';
   } else {
-    btn.textContent = `納品を記録する ✅ ${nouhinState.product.code} ${nouhinState.color} ×${nouhinState.quantity}`;
+    const colorText = nouhinState.product.isParts ? '' : ` ${nouhinState.color}`;
+    btn.textContent = `納品を記録する ✅ ${nouhinState.product.code}${colorText} ×${nouhinState.quantity}`;
     btn.className = 'submit-btn ready';
   }
 }
