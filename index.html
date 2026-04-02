@@ -358,9 +358,17 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     </div>
   </div>
 
+  <!-- ========== サイズ選択 ========== -->
+  <div id="screen-select-size" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-select-product')">← もどる</button>
+    <h1 id="size-product-name"></h1>
+    <p class="subtitle">サイズを選んでください</p>
+    <div class="product-grid" id="size-grid"></div>
+  </div>
+
   <!-- ========== カラー・数量・パーツ入力 ========== -->
   <div id="screen-input" class="hidden">
-    <button class="back-btn" onclick="showScreen('screen-select-product')">← もどる</button>
+    <button class="back-btn" onclick="goBackFromInput()">← もどる</button>
     <h1 id="selected-product-name"></h1>
 
     <div class="form-section">
@@ -636,8 +644,16 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <div class="product-grid" id="nouhin-product-grid"></div>
   </div>
 
-  <div id="screen-nouhin-input" class="hidden">
+  <!-- ========== 納品：サイズ選択 ========== -->
+  <div id="screen-nouhin-select-size" class="hidden">
     <button class="back-btn" onclick="showScreen('screen-nouhin-select-product')">← もどる</button>
+    <h1 id="nouhin-size-product-name"></h1>
+    <p class="subtitle">サイズを選んでください</p>
+    <div class="product-grid" id="nouhin-size-grid"></div>
+  </div>
+
+  <div id="screen-nouhin-input" class="hidden">
+    <button class="back-btn" onclick="goBackFromNouhinInput()">← もどる</button>
     <h1 id="nouhin-product-name"></h1>
 
     <div class="form-section">
@@ -2021,7 +2037,50 @@ function selectName(name) {
   setTimeout(() => showScreen('screen-select-product'), 300);
 }
 
+// サイズコードの表示名
+const SIZE_LABELS = {
+  'LBL': 'L（ラージ）', 'LBM': 'M（ミディアム）', 'LBS': 'S（スモール）', 'LBSS': 'SS（ミニ）',
+  'APM': 'M（ミディアム）', 'APS': 'S（スモール）',
+  'SBL': 'L（ラージ）', 'SBM': 'M（ミディアム）',
+  'SBDL': 'L（ラージ）', 'SBDM': 'M（ミディアム）',
+  'TAL': 'L（ラージ）', 'TAM': 'M（ミディアム）',
+  'FBM': 'M（ミディアム）', 'FBOL': 'OL（おおきめ）',
+  'IBL': 'L（ラージ）', 'IBM': 'M（ミディアム）', 'IBSS': 'SS（ミニ）',
+};
+
 function selectProduct(product) {
+  // サイズ展開がある商品はサイズ選択画面へ
+  if (product.sizes && product.sizes.length > 0) {
+    document.getElementById('size-product-name').textContent = `${product.code} ${product.name}`;
+    const grid = document.getElementById('size-grid');
+    grid.innerHTML = '';
+    product.sizes.forEach(sizeCode => {
+      const btn = document.createElement('div');
+      btn.className = 'product-card';
+      btn.style.cssText = 'padding:20px 12px; text-align:center; cursor:pointer;';
+      const label = SIZE_LABELS[sizeCode] || sizeCode;
+      btn.innerHTML = `<div style="font-size:24px; font-weight:700; margin-bottom:4px;">${sizeCode}</div><div style="font-size:12px; color:#86868b;">${label}</div>`;
+      btn.onclick = () => {
+        // サイズ選択済みの仮想商品を作って入力画面へ
+        const sizedProduct = {
+          ...product,
+          code: sizeCode,
+          name: product.name + '（' + (SIZE_LABELS[sizeCode] || sizeCode) + '）',
+          skuGroup: sizeCode,
+          originalCode: product.code
+        };
+        openInputScreen(sizedProduct);
+      };
+      grid.appendChild(btn);
+    });
+    showScreen('screen-select-size');
+    return;
+  }
+
+  openInputScreen(product);
+}
+
+function openInputScreen(product) {
   state.selectedProduct = product;
   state.selectedColor = '';
   state.quantity = 5;
@@ -2052,6 +2111,15 @@ function selectProduct(product) {
 
   updateSubmitBtn();
   showScreen('screen-input');
+}
+
+function goBackFromInput() {
+  if (state.selectedProduct && state.selectedProduct.originalCode) {
+    // サイズ付き商品→サイズ選択に戻る
+    showScreen('screen-select-size');
+  } else {
+    showScreen('screen-select-product');
+  }
 }
 
 function selectColor(color, btn) {
@@ -2159,6 +2227,44 @@ function selectNouhinName(name) {
 }
 
 function selectNouhinProduct(product) {
+  // サイズ展開がある商品はサイズ選択画面へ
+  if (product.sizes && product.sizes.length > 0) {
+    document.getElementById('nouhin-size-product-name').textContent = `${product.code} ${product.name}`;
+    const grid = document.getElementById('nouhin-size-grid');
+    grid.innerHTML = '';
+    product.sizes.forEach(sizeCode => {
+      const btn = document.createElement('div');
+      btn.className = 'product-card';
+      btn.style.cssText = 'padding:20px 12px; text-align:center; cursor:pointer;';
+      const label = SIZE_LABELS[sizeCode] || sizeCode;
+      btn.innerHTML = `<div style="font-size:24px; font-weight:700; margin-bottom:4px;">${sizeCode}</div><div style="font-size:12px; color:#86868b;">${label}</div>`;
+      btn.onclick = () => {
+        const sizedProduct = {
+          ...product,
+          code: sizeCode,
+          name: product.name + '（' + (SIZE_LABELS[sizeCode] || sizeCode) + '）',
+          skuGroup: sizeCode,
+          originalCode: product.code
+        };
+        openNouhinInputScreen(sizedProduct);
+      };
+      grid.appendChild(btn);
+    });
+    showScreen('screen-nouhin-select-size');
+    return;
+  }
+  openNouhinInputScreen(product);
+}
+
+function goBackFromNouhinInput() {
+  if (nouhinState.product && nouhinState.product.originalCode) {
+    showScreen('screen-nouhin-select-size');
+  } else {
+    showScreen('screen-nouhin-select-product');
+  }
+}
+
+function openNouhinInputScreen(product) {
   nouhinState.product = product;
   nouhinState.color = '';
   nouhinState.quantity = 5;
