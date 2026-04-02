@@ -400,7 +400,12 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <div class="success-screen">
       <div class="success-icon">✅</div>
       <div class="success-msg">記録しました！</div>
-      <div class="success-detail" id="success-detail"></div>
+      <div id="success-detail-card" style="background:white; border-radius:16px; padding:20px; margin:16px auto; max-width:320px; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-align:left;">
+        <div id="success-detail-lines"></div>
+      </div>
+      <div id="success-undo-area" style="margin:12px 0;">
+        <button onclick="undoLastRecord()" style="background:none; border:1px solid #ff3b30; color:#ff3b30; border-radius:8px; padding:8px 20px; font-size:13px; cursor:pointer;">⚠️ 間違えた！取り消す</button>
+      </div>
       <button class="role-btn" onclick="showScreen('screen-select-product')" style="display:inline-block; padding:16px 32px;">
         <div class="role-name">続けて入力する</div>
       </button>
@@ -684,7 +689,12 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <div class="success-screen">
       <div class="success-icon">📦✅</div>
       <div class="success-msg">納品を記録しました！</div>
-      <div class="success-detail" id="nouhin-success-detail"></div>
+      <div id="nouhin-success-detail-card" style="background:white; border-radius:16px; padding:20px; margin:16px auto; max-width:320px; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-align:left;">
+        <div id="nouhin-success-detail-lines"></div>
+      </div>
+      <div id="nouhin-success-undo-area" style="margin:12px 0;">
+        <button onclick="undoLastNouhinRecord()" style="background:none; border:1px solid #ff3b30; color:#ff3b30; border-radius:8px; padding:8px 20px; font-size:13px; cursor:pointer;">⚠️ 間違えた！取り消す</button>
+      </div>
       <button class="role-btn" onclick="showScreen('screen-nouhin-select-product')" style="display:inline-block; padding:16px 32px;">
         <div class="role-name">続けて納品する</div>
       </button>
@@ -2224,9 +2234,35 @@ function submitForm() {
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
   gasPost('add', { record });
 
-  document.getElementById('success-detail').textContent =
-    `${state.selectedName}さん / ${state.selectedProduct.name} / ${state.selectedColor} / ${state.quantity}枚`;
+  const colorText = state.selectedProduct.isParts ? '' : state.selectedColor;
+  const unitText = state.selectedProduct.isParts ? 'セット' : '枚';
+  document.getElementById('success-detail-lines').innerHTML =
+    `<div style="font-size:13px; color:#86868b; margin-bottom:8px;">以下の内容で記録しました</div>`
+    + `<div style="font-size:18px; font-weight:700; margin-bottom:6px;">${state.selectedProduct.code} ${state.selectedProduct.name}</div>`
+    + (colorText ? `<div style="font-size:15px; margin-bottom:4px;">🎨 ${colorText}</div>` : '')
+    + `<div style="font-size:15px; margin-bottom:4px;">📦 ${state.quantity}${unitText}</div>`
+    + `<div style="font-size:13px; color:#86868b;">👤 ${state.selectedName}</div>`;
+  document.getElementById('success-undo-area').style.display = 'block';
+  state.lastRecord = record;
   showScreen('screen-success');
+}
+
+function undoLastRecord() {
+  if (!state.lastRecord) return;
+  if (!confirm('直前の記録を取り消しますか？')) return;
+
+  // ローカルから削除
+  const idx = state.records.findIndex(r => r.date === state.lastRecord.date && r.product === state.lastRecord.product && r.color === state.lastRecord.color);
+  if (idx >= 0) state.records.splice(idx, 1);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+
+  // GASからも削除
+  gasPost('delete', { record: state.lastRecord });
+
+  state.lastRecord = null;
+  document.getElementById('success-detail-lines').innerHTML =
+    '<div style="font-size:16px; color:#ff3b30; font-weight:600; text-align:center;">🗑️ 取り消しました</div>';
+  document.getElementById('success-undo-area').style.display = 'none';
 }
 
 // ===== 納品フロー =====
@@ -2408,9 +2444,32 @@ function submitNouhin() {
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
   gasPost('add', { record });
 
-  document.getElementById('nouhin-success-detail').textContent =
-    `${nouhinState.name}さん / ${nouhinState.product.name} / ${nouhinState.color} / ${nouhinState.quantity}枚`;
+  const nColorText = nouhinState.product.isParts ? '' : nouhinState.color;
+  const nUnitText = nouhinState.product.isParts ? 'セット' : '枚';
+  document.getElementById('nouhin-success-detail-lines').innerHTML =
+    `<div style="font-size:13px; color:#86868b; margin-bottom:8px;">以下の内容で記録しました</div>`
+    + `<div style="font-size:18px; font-weight:700; margin-bottom:6px;">${nouhinState.product.code} ${nouhinState.product.name}</div>`
+    + (nColorText ? `<div style="font-size:15px; margin-bottom:4px;">🎨 ${nColorText}</div>` : '')
+    + `<div style="font-size:15px; margin-bottom:4px;">📦 ${nouhinState.quantity}${nUnitText}</div>`
+    + `<div style="font-size:13px; color:#86868b;">👤 ${nouhinState.name}</div>`;
+  document.getElementById('nouhin-success-undo-area').style.display = 'block';
+  nouhinState.lastRecord = record;
   showScreen('screen-nouhin-success');
+}
+
+function undoLastNouhinRecord() {
+  if (!nouhinState.lastRecord) return;
+  if (!confirm('直前の記録を取り消しますか？')) return;
+
+  const idx = state.records.findIndex(r => r.date === nouhinState.lastRecord.date && r.product === nouhinState.lastRecord.product && r.color === nouhinState.lastRecord.color);
+  if (idx >= 0) state.records.splice(idx, 1);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('delete', { record: nouhinState.lastRecord });
+
+  nouhinState.lastRecord = null;
+  document.getElementById('nouhin-success-detail-lines').innerHTML =
+    '<div style="font-size:16px; color:#ff3b30; font-weight:600; text-align:center;">🗑️ 取り消しました</div>';
+  document.getElementById('nouhin-success-undo-area').style.display = 'none';
 }
 
 // ===== 裁断・プリント・入庫 共通フロー =====
