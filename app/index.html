@@ -546,21 +546,24 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     </div>
   </div>
 
-  <!-- ========== 検品画面 ========== -->
-  <div id="screen-kenpin" class="hidden">
+  <!-- ========== 検品：検品待ちリスト ========== -->
+  <div id="screen-kenpin-list" class="hidden">
     <button class="back-btn" onclick="showScreen('screen-dash-kenpin')">← もどる</button>
     <h1>🔍 検品する</h1>
-    <p class="subtitle">納品された製品を検品します</p>
+    <p class="subtitle">検品する納品を選んでください</p>
+    <div id="kenpin-no-pending" class="no-pending" style="display:none;">検品待ちの納品はありません</div>
+    <div id="kenpin-pending-list" style="padding:0 16px;"></div>
+  </div>
 
-    <div class="form-section">
-      <h3>検品待ち</h3>
-      <div id="kenpin-pending-list"></div>
-    </div>
+  <!-- ========== 検品：入力画面 ========== -->
+  <div id="screen-kenpin-input" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-kenpin-list')">← もどる</button>
+    <h1>🔍 検品入力</h1>
 
-    <div class="form-section" id="kenpin-detail-section" style="display:none;">
-      <h3>検品内容</h3>
-      <div id="kenpin-detail"></div>
-      <div class="bgrade-section" style="margin-top:12px;">
+    <div id="kenpin-job-info" style="background:white; border-radius:12px; padding:14px 16px; margin:16px; box-shadow:0 1px 4px rgba(0,0,0,0.06);"></div>
+
+    <div style="padding:0 16px;">
+      <div class="bgrade-section">
         <div class="bgrade-row">
           <span class="bgrade-label">OK品</span>
           <div class="bgrade-qty">
@@ -588,9 +591,29 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       </div>
     </div>
 
-    <button class="submit-btn not-ready" id="kenpin-submit-btn" onclick="submitKenpin()">
-      検品する納品を選んでください
-    </button>
+    <div style="padding:16px;">
+      <button class="submit-btn not-ready" id="kenpin-submit-btn" onclick="submitKenpin()">
+        検品完了を記録する
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== 検品：成功画面 ========== -->
+  <div id="screen-kenpin-success" class="hidden">
+    <div style="text-align:center; padding:60px 20px 20px;">
+      <div style="font-size:48px;">✅</div>
+      <h2 style="margin:12px 0 4px;">検品完了！</h2>
+    </div>
+    <div id="kenpin-success-detail" style="background:white; border-radius:16px; padding:20px; margin:16px auto; max-width:320px; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-align:left;"></div>
+    <div id="kenpin-success-undo-area" style="text-align:center; margin:12px 0;">
+      <button onclick="undoLastKenpinRecord()" style="background:none; border:1px solid #ff3b30; color:#ff3b30; border-radius:8px; padding:8px 20px; font-size:13px; cursor:pointer;">⚠️ 間違えた！取り消す</button>
+    </div>
+    <div style="text-align:center; margin-top:20px;">
+      <button onclick="startKenpin()" style="background:#007aff; color:white; border:none; border-radius:12px; padding:14px 32px; font-size:16px; font-weight:600; cursor:pointer;">次の検品へ</button>
+      <div style="margin-top:12px;">
+        <button onclick="showScreen('screen-dash-kenpin')" style="background:none; border:none; color:#007aff; font-size:14px; cursor:pointer;">検品ダッシュボードへ戻る</button>
+      </div>
+    </div>
   </div>
 
   <!-- ========== 山田さんダッシュボード ========== -->
@@ -2938,56 +2961,79 @@ function getPendingKenpins() {
 }
 
 function startKenpin() {
-  kenpinState = { selectedDelivery: null, quantityOk: 0, quantityBGrade: 0, quantityRejected: 0 };
+  kenpinState = { selectedDelivery: null, quantityOk: 0, quantityBGrade: 0, quantityRejected: 0, lastRecord: null };
   const pending = getPendingDeliveries();
   const listEl = document.getElementById('kenpin-pending-list');
-  listEl.innerHTML = '';
+  const noEl = document.getElementById('kenpin-no-pending');
 
   if (pending.length === 0) {
-    listEl.innerHTML = '<div class="no-pending">検品待ちの納品はありません</div>';
-  } else {
-    pending.forEach(d => {
-      const dt = new Date(d.date);
-      const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
-      const div = document.createElement('div');
-      div.className = 'pending-order';
-      div.innerHTML = `
-        <div class="order-material">${d.name}さん — ${d.product}</div>
-        <div class="order-meta">${d.color} / ${d.quantity}個 / ${dateStr} 納品</div>
-      `;
-      div.onclick = () => selectKenpinDelivery(d, div);
-      listEl.appendChild(div);
-    });
+    listEl.innerHTML = '';
+    noEl.style.display = 'block';
+    showScreen('screen-kenpin-list');
+    return;
   }
 
-  document.getElementById('kenpin-detail-section').style.display = 'none';
-  updateKenpinBtn();
-  showScreen('screen-kenpin');
+  noEl.style.display = 'none';
+
+  // 人ごとにグループ化
+  const byName = {};
+  pending.forEach(d => {
+    if (!byName[d.name]) byName[d.name] = [];
+    byName[d.name].push(d);
+  });
+
+  let html = '';
+  Object.keys(byName).forEach(name => {
+    html += `<div style="margin-bottom:20px;">`;
+    html += `<div style="font-size:15px; font-weight:600; margin-bottom:8px; padding-left:4px;">👤 ${name}さん</div>`;
+    byName[name].forEach(d => {
+      const isParts = d.color === 'なし';
+      const colorText = isParts ? '' : ` ${d.color}`;
+      const unitText = isParts ? 'セット' : '枚';
+      const productName = d.productName || d.product;
+      const dt = new Date(d.date);
+      const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+      html += `<div class="alert-card" onclick='selectKenpinDelivery(${JSON.stringify(d).replace(/'/g, "&#39;")})'
+        style="cursor:pointer; margin-bottom:8px; padding:14px 16px; background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:16px; font-weight:600;">${d.product}${colorText}</div>
+        <div style="font-size:13px; color:#86868b; margin-top:2px;">${productName}</div>
+        <div style="font-size:14px; margin-top:6px;">
+          納品数 <strong>${d.quantity}${unitText}</strong>
+        </div>
+        <div style="font-size:11px; color:#aeaeb2; margin-top:4px;">${dateStr} 納品</div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  listEl.innerHTML = html;
+  showScreen('screen-kenpin-list');
 }
 
-function selectKenpinDelivery(delivery, el) {
+function selectKenpinDelivery(delivery) {
   kenpinState.selectedDelivery = delivery;
-  kenpinState.quantityOk = delivery.quantity;
+  kenpinState.quantityOk = parseInt(delivery.quantity) || 0;
   kenpinState.quantityBGrade = 0;
   kenpinState.quantityRejected = 0;
 
-  document.querySelectorAll('#kenpin-pending-list .pending-order').forEach(d => d.classList.remove('selected'));
-  el.classList.add('selected');
-
+  const isParts = delivery.color === 'なし';
+  const colorText = isParts ? '' : ` ${delivery.color}`;
+  const unitText = isParts ? 'セット' : '枚';
+  const productName = delivery.productName || delivery.product;
   const dt = new Date(delivery.date);
   const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
-  document.getElementById('kenpin-detail').innerHTML = `
-    <div style="margin-bottom:8px;"><strong>${delivery.name}さん</strong></div>
-    <div>${delivery.product} / ${delivery.color}</div>
-    <div>数量: ${delivery.quantity}個 / 納品日: ${dateStr}</div>
-  `;
-  document.getElementById('kenpin-detail-section').style.display = '';
+
+  document.getElementById('kenpin-job-info').innerHTML =
+    `<div style="font-size:13px; color:#86868b;">納品情報</div>`
+    + `<div style="font-size:15px; margin-top:4px;">👤 ${delivery.name}さん｜${delivery.product}${colorText}｜${delivery.quantity}${unitText}</div>`
+    + `<div style="font-size:12px; color:#aeaeb2; margin-top:2px;">${dateStr} 納品</div>`;
 
   document.getElementById('kenpin-ok-input').value = kenpinState.quantityOk;
   document.getElementById('kenpin-bgrade-input').value = kenpinState.quantityBGrade;
   document.getElementById('kenpin-rejected-input').value = kenpinState.quantityRejected;
 
   updateKenpinBtn();
+  showScreen('screen-kenpin-input');
 }
 
 function changeKenpinQty(field, delta) {
@@ -3050,11 +3096,13 @@ function syncKenpinFromInput(field) {
 function updateKenpinBtn() {
   const btn = document.getElementById('kenpin-submit-btn');
   if (!kenpinState.selectedDelivery) {
-    btn.textContent = '検品する納品を選んでください';
+    btn.textContent = '検品完了を記録する';
     btn.className = 'submit-btn not-ready';
   } else {
     const d = kenpinState.selectedDelivery;
-    btn.textContent = `検品完了を記録する ✅ ${d.product} ${d.color} OK:${kenpinState.quantityOk} B品:${kenpinState.quantityBGrade} 不可:${kenpinState.quantityRejected}`;
+    const isParts = d.color === 'なし';
+    const colorText = isParts ? '' : ` ${d.color}`;
+    btn.textContent = `検品完了 ✅ ${d.product}${colorText} OK:${kenpinState.quantityOk} B:${kenpinState.quantityBGrade} 不可:${kenpinState.quantityRejected}`;
     btn.className = 'submit-btn ready';
   }
 }
@@ -3062,6 +3110,17 @@ function updateKenpinBtn() {
 function submitKenpin() {
   if (!kenpinState.selectedDelivery) return;
   const d = kenpinState.selectedDelivery;
+  const isParts = d.color === 'なし';
+  const colorText = isParts ? '' : `\nカラー: ${d.color}`;
+  const unitText = isParts ? 'セット' : '枚';
+
+  const msg = `この内容で検品を記録しますか？\n\n`
+    + `👤 ${d.name}さん\n`
+    + `📦 ${d.product} ${d.productName || d.product}${colorText}\n`
+    + `✅ OK: ${kenpinState.quantityOk}${unitText}\n`
+    + `⚠️ B品: ${kenpinState.quantityBGrade}${unitText}\n`
+    + `❌ 不可: ${kenpinState.quantityRejected}${unitText}`;
+  if (!confirm(msg)) return;
 
   const record = {
     date: new Date().toISOString(),
@@ -3080,11 +3139,38 @@ function submitKenpin() {
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
   gasPost('add', { record });
 
-  workSuccessFrom = 'screen-dash-kenpin';
-  document.getElementById('work-success-msg').textContent = '検品完了を記録しました！';
-  document.getElementById('work-success-detail').textContent =
-    `${d.name}さん / ${d.product} / ${d.color} / OK:${kenpinState.quantityOk} B品:${kenpinState.quantityBGrade} 不可:${kenpinState.quantityRejected}`;
-  showScreen('screen-work-success');
+  const nColorText = isParts ? '' : d.color;
+  document.getElementById('kenpin-success-detail').innerHTML =
+    `<div style="font-size:13px; color:#86868b; margin-bottom:8px;">以下の内容で記録しました</div>`
+    + `<div style="font-size:18px; font-weight:700; margin-bottom:6px;">${d.product} ${d.productName || d.product}</div>`
+    + (nColorText ? `<div style="font-size:15px; margin-bottom:4px;">🎨 ${nColorText}</div>` : '')
+    + `<div style="font-size:15px; margin-bottom:4px;">✅ OK: ${kenpinState.quantityOk}${unitText}</div>`
+    + `<div style="font-size:15px; margin-bottom:4px;">⚠️ B品: ${kenpinState.quantityBGrade}${unitText}</div>`
+    + `<div style="font-size:15px; margin-bottom:4px;">❌ 不可: ${kenpinState.quantityRejected}${unitText}</div>`
+    + `<div style="font-size:13px; color:#86868b; margin-top:8px;">👤 ${d.name}</div>`;
+  document.getElementById('kenpin-success-undo-area').style.display = 'block';
+  kenpinState.lastRecord = record;
+  showScreen('screen-kenpin-success');
+}
+
+function undoLastKenpinRecord() {
+  if (!kenpinState.lastRecord) return;
+  if (!confirm('直前の検品記録を取り消しますか？')) return;
+
+  const idx = state.records.findIndex(r =>
+    r.date === kenpinState.lastRecord.date &&
+    r.product === kenpinState.lastRecord.product &&
+    r.color === kenpinState.lastRecord.color &&
+    r.type === '検品完了'
+  );
+  if (idx >= 0) state.records.splice(idx, 1);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('delete', { record: kenpinState.lastRecord });
+  kenpinState.lastRecord = null;
+
+  document.getElementById('kenpin-success-detail').innerHTML =
+    `<div style="font-size:16px; color:#ff3b30; font-weight:600;">取り消しました</div>`;
+  document.getElementById('kenpin-success-undo-area').style.display = 'none';
 }
 
 // ===== 新・入庫フロー（検品済みリストベース） =====
