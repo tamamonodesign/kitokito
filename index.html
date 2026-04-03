@@ -472,6 +472,9 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
     <!-- Tab 3: 販売数 -->
     <div class="dash-tab-content" id="dash-tab-hanbai">
+      <!-- 入力済み期間 -->
+      <div id="hanbai-coverage" style="margin-bottom:12px;"></div>
+
       <!-- CSV インポート -->
       <div style="margin-bottom:16px;">
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -4741,6 +4744,7 @@ function refreshHanbaiSheet() {
   const table = document.getElementById('hanbai-table');
   if (!table) return;
 
+  refreshHanbaiCoverage();
   refreshHanbaiHistory();
 
   const hanbai = calcHanbaiData();
@@ -4899,6 +4903,20 @@ async function handleCSVImport(fileInput) {
       html += `<div style="font-size:13px; color:#ff9500; margin-bottom:4px;">⚠️ 未登録: ${Object.keys(unmapped).length}件 / ${unmappedCount}個（${Object.keys(unmapped).join(', ')}）</div>`;
     }
 
+    // 期間入力
+    const today = new Date().toISOString().split('T')[0];
+    const coverageEnd = getSalesCoverageEnd();
+    const defaultFrom = coverageEnd ? new Date(new Date(coverageEnd).getTime() + 86400000).toISOString().split('T')[0] : '';
+    html += '<div style="margin-top:12px; padding:12px; background:#f5f5f7; border-radius:10px;">';
+    html += '<div style="font-size:13px; font-weight:600; margin-bottom:8px;">📅 注文期間</div>';
+    html += '<div style="display:flex; gap:8px; align-items:center;">';
+    html += `<input type="date" id="csv-date-from" value="${defaultFrom}" style="padding:8px; border:1px solid #e5e5ea; border-radius:8px; font-size:14px;">`;
+    html += '<span style="font-size:14px;">〜</span>';
+    html += `<input type="date" id="csv-date-to" value="${today}" style="padding:8px; border:1px solid #e5e5ea; border-radius:8px; font-size:14px;">`;
+    html += '</div>';
+    html += '<div id="csv-date-overlap-warn" style="margin-top:6px;"></div>';
+    html += '</div>';
+
     // SKU一覧テーブル
     html += '<div style="max-height:200px; overflow-y:auto; margin-top:8px;">';
     html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
@@ -4970,6 +4988,36 @@ function confirmCSVImport() {
   const data = window._pendingCSVImport;
   if (!data) return;
 
+  // 期間を取得
+  const fromEl = document.getElementById('csv-date-from');
+  const toEl = document.getElementById('csv-date-to');
+  const periodFrom = fromEl ? fromEl.value : '';
+  const periodTo = toEl ? toEl.value : '';
+
+  if (!periodFrom || !periodTo) {
+    alert('注文期間を入力してください');
+    return;
+  }
+  if (periodFrom > periodTo) {
+    alert('開始日が終了日より後になっています');
+    return;
+  }
+
+  // 重複期間チェック → 重複する既存インポートを特定
+  const existingImports = getImportPeriods();
+  const overlapping = existingImports.filter(imp =>
+    imp.from <= periodTo && imp.to >= periodFrom
+  );
+  if (overlapping.length > 0) {
+    const overlapList = overlapping.map(o => `${o.from}〜${o.to}`).join(', ');
+    if (!confirm(`以下の期間と重複しています:\n${overlapList}\n\n重複分を上書きしますか？（古いデータを削除して新しいデータに置き換えます）`)) {
+      return;
+    }
+    // 重複するインポートを削除
+    const removeIds = new Set(overlapping.map(o => o.importId));
+    state.records = state.records.filter(r => !(r.type === '販売' && removeIds.has(r.importId)));
+  }
+
   const now = new Date().toISOString();
   const importId = 'CSV_' + Date.now();
 
@@ -4989,7 +5037,9 @@ function confirmCSVImport() {
       quantity: qty,
       source: 'ごくーCSV',
       importId: importId,
-      fileName: data.fileName
+      fileName: data.fileName,
+      periodFrom: periodFrom,
+      periodTo: periodTo
     });
   });
 
@@ -5004,7 +5054,9 @@ function confirmCSVImport() {
       quantity: data.shoulderCount,
       source: 'ごくーCSV（SHO自動）',
       importId: importId,
-      fileName: data.fileName
+      fileName: data.fileName,
+      periodFrom: periodFrom,
+      periodTo: periodTo
     });
   }
 
@@ -5022,6 +5074,40 @@ function confirmCSVImport() {
   refreshHanbaiSheet();
   refreshHanbaiHistory();
   refreshZentaiTable();
+}
+
+// インポート済み期間一覧を取得
+function getImportPeriods() {
+  const periods = {};
+  state.records.filter(r => r.type === '販売' && r.importId && r.periodFrom).forEach(r => {
+    if (!periods[r.importId]) {
+      periods[r.importId] = { importId: r.importId, from: r.periodFrom, to: r.periodTo, source: r.source, fileName: r.fileName };
+    }
+  });
+  return Object.values(periods).sort((a, b) => a.from.localeCompare(b.from));
+}
+
+// 販売データの入力済み最終日を取得
+function getSalesCoverageEnd() {
+  const periods = getImportPeriods();
+  if (periods.length === 0) return null;
+  return periods.reduce((max, p) => p.to > max ? p.to : max, periods[0].to);
+}
+
+// 入力済み期間表示
+function refreshHanbaiCoverage() {
+  const el = document.getElementById('hanbai-coverage');
+  if (!el) return;
+  const periods = getImportPeriods();
+  if (periods.length === 0) {
+    el.innerHTML = '<div style="background:#fff3e0; border-radius:10px; padding:12px; font-size:13px; color:#ff9500;">📅 販売データ未入力</div>';
+    return;
+  }
+  const coverageEnd = getSalesCoverageEnd();
+  const coverageStart = periods.reduce((min, p) => p.from < min ? p.from : min, periods[0].from);
+  el.innerHTML = '<div style="background:#e5f9e7; border-radius:10px; padding:12px; font-size:13px; color:#1d1d1f;">'
+    + '📅 販売データ入力済み: <b>' + coverageStart + '</b> 〜 <b>' + coverageEnd + '</b>'
+    + '</div>';
 }
 
 function cancelCSVImport() {
@@ -5050,7 +5136,7 @@ function refreshHanbaiHistory() {
   const groups = {};
   salesRecords.forEach(r => {
     const gid = r.importId || 'manual_' + r.date;
-    if (!groups[gid]) groups[gid] = { records: [], date: r.date, source: r.source || '手入力', fileName: r.fileName || '' };
+    if (!groups[gid]) groups[gid] = { records: [], date: r.date, source: r.source || '手入力', fileName: r.fileName || '', periodFrom: r.periodFrom || '', periodTo: r.periodTo || '' };
     groups[gid].records.push(r);
   });
 
@@ -5062,11 +5148,12 @@ function refreshHanbaiHistory() {
     const g = groups[gid];
     const totalQty = g.records.reduce((s, r) => s + (r.quantity || 0), 0);
     const skuCount = new Set(g.records.map(r => r.product + '_' + r.color)).size;
+    const periodStr = g.periodFrom && g.periodTo ? g.periodFrom + '〜' + g.periodTo : '';
     const dateStr = new Date(g.date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     html += '<div style="background:white; border-radius:10px; padding:10px 14px; margin-bottom:6px; box-shadow:0 1px 4px rgba(0,0,0,0.06); display:flex; justify-content:space-between; align-items:center;">';
     html += '<div>';
     html += `<div style="font-size:13px; font-weight:600;">${g.source} ${g.fileName ? '(' + g.fileName + ')' : ''}</div>`;
-    html += `<div style="font-size:12px; color:#86868b;">${dateStr} — ${skuCount}SKU / ${totalQty}個</div>`;
+    html += `<div style="font-size:12px; color:#86868b;">${periodStr ? '📅 ' + periodStr + ' — ' : ''}${skuCount}SKU / ${totalQty}個</div>`;
     html += '</div>';
     html += `<button onclick="undoSalesImport('${gid}')" style="padding:6px 12px; border:1px solid #ff3b30; border-radius:8px; background:white; color:#ff3b30; font-size:12px; font-weight:600; cursor:pointer;">取消</button>`;
     html += '</div>';
