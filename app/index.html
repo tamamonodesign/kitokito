@@ -632,42 +632,25 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
   </div>
 
-  <!-- ========== 内職：納品 ========== -->
-  <div id="screen-nouhin-select-name" class="hidden">
+  <!-- ========== 内職：納品（持ち出し中から選択） ========== -->
+  <div id="screen-nouhin-active-list" class="hidden">
     <button class="back-btn" onclick="showScreen('screen-naishoku-menu')">← もどる</button>
     <h1>📦 納品</h1>
-    <p class="subtitle">お名前を選んでください</p>
-    <div class="form-section">
-      <div class="name-grid" id="nouhin-name-buttons"></div>
-    </div>
+    <p class="subtitle">納品する仕事をタップしてください</p>
+    <div id="nouhin-active-list"></div>
+    <div id="nouhin-no-active" class="no-data" style="display:none;">持ち出し中の仕事がありません</div>
   </div>
 
-  <div id="screen-nouhin-select-product" class="hidden">
-    <button class="back-btn" onclick="showScreen('screen-nouhin-select-name')">← もどる</button>
-    <h1 id="nouhin-greeting"></h1>
-    <p class="subtitle">納品する商品をタップしてください</p>
-    <div class="product-grid" id="nouhin-product-grid"></div>
-  </div>
-
-  <!-- ========== 納品：サイズ選択 ========== -->
-  <div id="screen-nouhin-select-size" class="hidden">
-    <button class="back-btn" onclick="showScreen('screen-nouhin-select-product')">← もどる</button>
-    <h1 id="nouhin-size-product-name"></h1>
-    <p class="subtitle">サイズを選んでください</p>
-    <div class="product-grid" id="nouhin-size-grid"></div>
-  </div>
-
+  <!-- ========== 納品：数量・確認入力 ========== -->
   <div id="screen-nouhin-input" class="hidden">
-    <button class="back-btn" onclick="goBackFromNouhinInput()">← もどる</button>
+    <button class="back-btn" onclick="showScreen('screen-nouhin-active-list')">← もどる</button>
     <h1 id="nouhin-product-name"></h1>
 
-    <div class="form-section">
-      <h3>カラーを選んでください</h3>
-      <div class="color-grid" id="nouhin-color-buttons"></div>
+    <div id="nouhin-job-info" style="background:white; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
     </div>
 
     <div class="form-section">
-      <h3>納品数量</h3>
+      <h3 id="nouhin-qty-label">納品数量</h3>
       <div class="qty-control">
         <button class="qty-btn minus" onclick="changeNouhinQty(-1)">−</button>
         <input type="number" class="qty-input" id="nouhin-qty-input" min="1" value="5" onchange="syncQtyFromInput('nouhin')">
@@ -681,10 +664,11 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     </div>
 
     <button class="submit-btn not-ready" id="nouhin-submit-btn" onclick="submitNouhin()">
-      カラーを選んでください
+      確認項目をすべてチェックしてください
     </button>
   </div>
 
+  <!-- ========== 納品：完了 ========== -->
   <div id="screen-nouhin-success" class="hidden">
     <div class="success-screen">
       <div class="success-icon">📦✅</div>
@@ -695,7 +679,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <div id="nouhin-success-undo-area" style="margin:12px 0;">
         <button onclick="undoLastNouhinRecord()" style="background:none; border:1px solid #ff3b30; color:#ff3b30; border-radius:8px; padding:8px 20px; font-size:13px; cursor:pointer;">⚠️ 間違えた！取り消す</button>
       </div>
-      <button class="role-btn" onclick="showScreen('screen-nouhin-select-product')" style="display:inline-block; padding:16px 32px;">
+      <button class="role-btn" onclick="startNouhin()" style="display:inline-block; padding:16px 32px;">
         <div class="role-name">続けて納品する</div>
       </button>
       <br><br>
@@ -2265,127 +2249,102 @@ function undoLastRecord() {
   document.getElementById('success-undo-area').style.display = 'none';
 }
 
-// ===== 納品フロー =====
-let nouhinState = { name: '', product: null, color: '', quantity: 5, checks: new Set() };
+// ===== 納品フロー（持ち出し中リストから選択）=====
+let nouhinState = { name: '', product: null, color: '', quantity: 5, checks: new Set(), sourceRecord: null };
 const NOUHIN_CHECKS = ['数量あってる', '仕上がりキレイ', '糸くず取った'];
 
+function getActiveJobs() {
+  const mochidashi = state.records.filter(r => r.type === '持ち出し');
+  const nouhin = state.records.filter(r => r.type === '納品');
+
+  // 持ち出しごとに納品済み数を計算
+  return mochidashi.map(m => {
+    // 同じ人・商品・カラーの納品数を合計
+    const delivered = nouhin
+      .filter(n => n.name === m.name && n.product === m.product && n.color === m.color && n.date > m.date)
+      .reduce((sum, n) => sum + (parseInt(n.quantity) || 0), 0);
+    const remaining = Math.max(0, (parseInt(m.quantity) || 0) - delivered);
+    return { ...m, delivered, remaining };
+  }).filter(m => m.remaining > 0); // 残数がある仕事だけ
+}
+
 function startNouhin() {
-  // 名前ボタン生成
-  const grid = document.getElementById('nouhin-name-buttons');
-  grid.innerHTML = '';
-  STAFF_NAMES.forEach(name => {
-    const btn = document.createElement('button');
-    btn.className = 'name-btn';
-    btn.textContent = name;
-    btn.onclick = () => selectNouhinName(name);
-    grid.appendChild(btn);
-  });
-  showScreen('screen-nouhin-select-name');
-}
+  const active = getActiveJobs();
+  const listEl = document.getElementById('nouhin-active-list');
+  const noEl = document.getElementById('nouhin-no-active');
 
-function selectNouhinName(name) {
-  nouhinState.name = name;
-  document.querySelectorAll('#nouhin-name-buttons .name-btn').forEach(b => b.classList.toggle('selected', b.textContent === name));
-  document.getElementById('nouhin-greeting').textContent = `${name}さん、お疲れさまです！`;
-  // 商品グリッド生成
-  const grid = document.getElementById('nouhin-product-grid');
-  grid.innerHTML = '';
-  PRODUCTS.forEach(p => {
-    const card = document.createElement('div');
-    card.className = 'product-card';
-    card.onclick = () => selectNouhinProduct(p);
-    card.innerHTML = `<img src="${p.img}" alt="${p.name}" loading="lazy"><div class="label">${p.code}<br>${p.name}</div>`;
-    grid.appendChild(card);
-  });
-  // パーツ制作セクション
-  const existingPartsSection = grid.parentNode.querySelector('.nouhin-parts-section');
-  if (existingPartsSection) existingPartsSection.remove();
-  const partsSection = document.createElement('div');
-  partsSection.className = 'nouhin-parts-section';
-  partsSection.innerHTML = '<div style="font-size:14px; font-weight:600; color:#86868b; margin:20px 0 10px; border-top:1px solid #e5e5ea; padding-top:16px;">🔧 パーツ制作</div>';
-  grid.parentNode.insertBefore(partsSection, grid.nextSibling);
-  const partsGrid = document.createElement('div');
-  partsGrid.className = 'product-grid';
-  partsSection.appendChild(partsGrid);
-  PARTS_PRODUCTS.forEach(p => {
-    const card = document.createElement('div');
-    card.className = 'product-card';
-    card.style.cssText = 'padding:16px 12px; text-align:center; cursor:pointer;';
-    card.onclick = () => selectNouhinProduct(p);
-    card.innerHTML = `<div style="font-size:28px; margin-bottom:6px;">🔩</div><div class="label">${p.code}<br>${p.name}</div>`;
-    partsGrid.appendChild(card);
-  });
-  setTimeout(() => showScreen('screen-nouhin-select-product'), 300);
-}
-
-function selectNouhinProduct(product) {
-  // サイズ展開がある商品はサイズ選択画面へ
-  if (product.sizes && product.sizes.length > 0) {
-    document.getElementById('nouhin-size-product-name').textContent = `${product.code} ${product.name}`;
-    const grid = document.getElementById('nouhin-size-grid');
-    grid.innerHTML = '';
-    product.sizes.forEach(sizeCode => {
-      const btn = document.createElement('div');
-      btn.className = 'product-card';
-      btn.style.cssText = 'padding:20px 12px; text-align:center; cursor:pointer;';
-      const label = SIZE_LABELS[sizeCode] || sizeCode;
-      btn.innerHTML = `<div style="font-size:24px; font-weight:700; margin-bottom:4px;">${sizeCode}</div><div style="font-size:12px; color:#86868b;">${label}</div>`;
-      btn.onclick = () => {
-        const sizedProduct = {
-          ...product,
-          code: sizeCode,
-          name: product.name + '（' + (SIZE_LABELS[sizeCode] || sizeCode) + '）',
-          skuGroup: sizeCode,
-          originalCode: product.code
-        };
-        openNouhinInputScreen(sizedProduct);
-      };
-      grid.appendChild(btn);
-    });
-    showScreen('screen-nouhin-select-size');
+  if (active.length === 0) {
+    listEl.innerHTML = '';
+    noEl.style.display = 'block';
+    showScreen('screen-nouhin-active-list');
     return;
   }
-  openNouhinInputScreen(product);
+
+  noEl.style.display = 'none';
+
+  // 人ごとにグループ化
+  const byName = {};
+  active.forEach(job => {
+    if (!byName[job.name]) byName[job.name] = [];
+    byName[job.name].push(job);
+  });
+
+  let html = '';
+  Object.keys(byName).forEach(name => {
+    html += `<div style="margin-bottom:20px;">`;
+    html += `<div style="font-size:15px; font-weight:600; margin-bottom:8px; padding-left:4px;">👤 ${name}さん</div>`;
+    byName[name].forEach(job => {
+      const isParts = job.color === 'なし';
+      const colorText = isParts ? '' : ` ${job.color}`;
+      const unitText = isParts ? 'セット' : '枚';
+      const productName = job.productName || job.product;
+      html += `<div class="alert-card" onclick='selectNouhinJob(${JSON.stringify(job).replace(/'/g, "&#39;")})'
+        style="cursor:pointer; margin-bottom:8px; padding:14px 16px; background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:16px; font-weight:600;">${job.product}${colorText}</div>
+        <div style="font-size:13px; color:#86868b; margin-top:2px;">${productName}</div>
+        <div style="font-size:14px; margin-top:6px;">
+          持ち出し <strong>${job.quantity}${unitText}</strong>
+          → 残り <strong style="color:#ff9500;">${job.remaining}${unitText}</strong>
+        </div>
+        <div style="font-size:11px; color:#aeaeb2; margin-top:4px;">${fmtDate(job.date)} 持ち出し</div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  listEl.innerHTML = html;
+  showScreen('screen-nouhin-active-list');
 }
 
-function goBackFromNouhinInput() {
-  if (nouhinState.product && nouhinState.product.originalCode) {
-    showScreen('screen-nouhin-select-size');
-  } else {
-    showScreen('screen-nouhin-select-product');
-  }
-}
-
-function openNouhinInputScreen(product) {
-  nouhinState.product = product;
-  nouhinState.color = product.isParts ? 'なし' : '';
-  nouhinState.quantity = 5;
+function selectNouhinJob(job) {
+  nouhinState.sourceRecord = job;
+  nouhinState.name = job.name;
+  nouhinState.color = job.color;
+  nouhinState.quantity = job.remaining;
   nouhinState.checks = new Set();
 
-  document.getElementById('nouhin-product-name').textContent = `${product.code} ${product.name}`;
+  const isParts = job.color === 'なし';
+  const colorText = isParts ? '' : ` ${job.color}`;
+  const unitText = isParts ? 'セット' : '枚';
+  const productName = job.productName || job.product;
+
+  // 仮のproductオブジェクトを作成
+  nouhinState.product = {
+    code: job.product,
+    name: productName,
+    isParts: isParts
+  };
+
+  document.getElementById('nouhin-product-name').textContent = `${job.product} ${productName}`;
+  document.getElementById('nouhin-qty-label').textContent =
+    `納品数量（持ち出し${job.quantity}${unitText}のうち）`;
   document.getElementById('nouhin-qty-input').value = nouhinState.quantity;
 
-  // カラーセクション：パーツ制作の場合は非表示
-  const colorSection = document.getElementById('nouhin-color-buttons').parentNode;
-  const colorGrid = document.getElementById('nouhin-color-buttons');
-  colorGrid.innerHTML = '';
-  if (product.isParts) {
-    colorSection.style.display = 'none';
-  } else {
-    colorSection.style.display = '';
-    product.colors.forEach(c => {
-      const btn = document.createElement('button');
-      btn.className = 'color-btn';
-      btn.textContent = c;
-      btn.onclick = () => {
-        nouhinState.color = c;
-        document.querySelectorAll('#nouhin-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        updateNouhinBtn();
-      };
-      colorGrid.appendChild(btn);
-    });
-  }
+  // ジョブ情報表示
+  document.getElementById('nouhin-job-info').innerHTML =
+    `<div style="font-size:13px; color:#86868b;">持ち出し情報</div>`
+    + `<div style="font-size:15px; margin-top:4px;">👤 ${job.name}さん｜${job.product}${colorText}｜${job.quantity}${unitText}</div>`
+    + `<div style="font-size:12px; color:#aeaeb2; margin-top:2px;">${fmtDate(job.date)}</div>`;
 
   // チェックリスト
   const list = document.getElementById('nouhin-check-list');
@@ -2401,7 +2360,8 @@ function openNouhinInputScreen(product) {
 }
 
 function changeNouhinQty(delta) {
-  nouhinState.quantity = Math.max(1, nouhinState.quantity + delta);
+  const max = nouhinState.sourceRecord ? nouhinState.sourceRecord.remaining : 999;
+  nouhinState.quantity = Math.max(1, Math.min(max, nouhinState.quantity + delta));
   document.getElementById('nouhin-qty-input').value = nouhinState.quantity;
 }
 
@@ -2414,21 +2374,20 @@ function toggleNouhinCheck(el, idx) {
 function updateNouhinBtn() {
   const btn = document.getElementById('nouhin-submit-btn');
   const allChecked = nouhinState.checks.size === NOUHIN_CHECKS.length;
-  if (!nouhinState.color) {
-    btn.textContent = 'カラーを選んでください';
-    btn.className = 'submit-btn not-ready';
-  } else if (!allChecked) {
+  if (!allChecked) {
     btn.textContent = '確認項目をすべてチェックしてください';
     btn.className = 'submit-btn not-ready';
   } else {
-    const colorText = nouhinState.product.isParts ? '' : ` ${nouhinState.color}`;
-    btn.textContent = `納品を記録する ✅ ${nouhinState.product.code}${colorText} ×${nouhinState.quantity}`;
+    const isParts = nouhinState.product && nouhinState.product.isParts;
+    const colorText = isParts ? '' : ` ${nouhinState.color}`;
+    const unitText = isParts ? 'セット' : '枚';
+    btn.textContent = `納品を記録する ✅ ${nouhinState.product.code}${colorText} ×${nouhinState.quantity}${unitText}`;
     btn.className = 'submit-btn ready';
   }
 }
 
 function submitNouhin() {
-  if (!nouhinState.color || !nouhinState.product) return;
+  if (!nouhinState.product) return;
   if (nouhinState.checks.size !== NOUHIN_CHECKS.length) return;
 
   const record = {
@@ -2444,8 +2403,9 @@ function submitNouhin() {
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
   gasPost('add', { record });
 
-  const nColorText = nouhinState.product.isParts ? '' : nouhinState.color;
-  const nUnitText = nouhinState.product.isParts ? 'セット' : '枚';
+  const isParts = nouhinState.product.isParts;
+  const nColorText = isParts ? '' : nouhinState.color;
+  const nUnitText = isParts ? 'セット' : '枚';
   document.getElementById('nouhin-success-detail-lines').innerHTML =
     `<div style="font-size:13px; color:#86868b; margin-bottom:8px;">以下の内容で記録しました</div>`
     + `<div style="font-size:18px; font-weight:700; margin-bottom:6px;">${nouhinState.product.code} ${nouhinState.product.name}</div>`
