@@ -4424,7 +4424,8 @@ function refreshZentaiTable() {
   allSKUs.forEach(s => { agg[s.sku] = { mochidashi: 0, nouhin: 0, kenpinOk: 0, kenpinB: 0, kenpinRejected: 0, nyukoQty: 0, nyukoB: 0 }; });
 
   records.forEach(r => {
-    const key = r.product + '_' + (r.color || '');
+    const colorCode = (r.color || '').split(' ')[0];
+    const key = r.product + '_' + colorCode;
     if (!agg[key]) return;
     if (r.type === '持ち出し') agg[key].mochidashi += (r.quantity || 0);
     if (r.type === '納品') agg[key].nouhin += (r.quantityOk || r.quantity || 0);
@@ -4589,7 +4590,7 @@ function refreshTanaoroshiSheet() {
   // Group tana data: per SKU per month (latest record per month)
   const tanaMap = {}; // sku -> month -> { quantity, bGrade }
   tanaRecords.forEach(r => {
-    const key = r.product + '_' + (r.color || '');
+    const key = r.product + '_' + (r.color || '').split(' ')[0];
     const d = new Date(r.date);
     const m = d.getFullYear() + '/' + (d.getMonth() + 1);
     if (!tanaMap[key]) tanaMap[key] = {};
@@ -4650,7 +4651,7 @@ function calcHanbaiData() {
   // Build tanaoroshi map: sku -> month -> quantity (latest per month)
   const tanaMap = {};
   tanaRecords.forEach(r => {
-    const key = r.product + '_' + (r.color || '');
+    const key = r.product + '_' + (r.color || '').split(' ')[0];
     const d = new Date(r.date);
     const m = d.getFullYear() + '/' + (d.getMonth() + 1);
     if (!tanaMap[key]) tanaMap[key] = {};
@@ -4662,7 +4663,7 @@ function calcHanbaiData() {
   // Build nyuko map: sku -> month -> total quantity
   const nyukoMap = {};
   nyukoRecords.forEach(r => {
-    const key = r.product + '_' + (r.color || '');
+    const key = r.product + '_' + (r.color || '').split(' ')[0];
     const d = new Date(r.date);
     const m = d.getFullYear() + '/' + (d.getMonth() + 1);
     if (!nyukoMap[key]) nyukoMap[key] = {};
@@ -4797,7 +4798,7 @@ function aggregateProductionProgress() {
   });
 
   records.forEach(r => {
-    const key = r.product + '_' + (r.color || '');
+    const key = r.product + '_' + (r.color || '').split(' ')[0];
     const pg = skuToPG[key];
     if (!pg) return;
     if (!progress[pg]) progress[pg] = { mochidashi: 0, nouhin: 0, kenpinOk: 0, nyukoQty: 0 };
