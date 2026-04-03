@@ -658,13 +658,8 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       </div>
     </div>
 
-    <div class="form-section">
-      <h3>仕上がり確認</h3>
-      <ul class="parts-list" id="nouhin-check-list"></ul>
-    </div>
-
-    <button class="submit-btn not-ready" id="nouhin-submit-btn" onclick="submitNouhin()">
-      確認項目をすべてチェックしてください
+    <button class="submit-btn ready" id="nouhin-submit-btn" onclick="submitNouhin()">
+      納品を記録する
     </button>
   </div>
 
@@ -2250,8 +2245,7 @@ function undoLastRecord() {
 }
 
 // ===== 納品フロー（持ち出し中リストから選択）=====
-let nouhinState = { name: '', product: null, color: '', quantity: 5, checks: new Set(), sourceRecord: null };
-const NOUHIN_CHECKS = ['数量あってる', '仕上がりキレイ', '糸くず取った'];
+let nouhinState = { name: '', product: null, color: '', quantity: 5, sourceRecord: null };
 
 function getActiveJobs() {
   const mochidashi = state.records.filter(r => r.type === '持ち出し');
@@ -2321,7 +2315,6 @@ function selectNouhinJob(job) {
   nouhinState.name = job.name;
   nouhinState.color = job.color;
   nouhinState.quantity = job.remaining;
-  nouhinState.checks = new Set();
 
   const isParts = job.color === 'なし';
   const colorText = isParts ? '' : ` ${job.color}`;
@@ -2373,22 +2366,24 @@ function toggleNouhinCheck(el, idx) {
 
 function updateNouhinBtn() {
   const btn = document.getElementById('nouhin-submit-btn');
-  const allChecked = nouhinState.checks.size === NOUHIN_CHECKS.length;
-  if (!allChecked) {
-    btn.textContent = '確認項目をすべてチェックしてください';
-    btn.className = 'submit-btn not-ready';
-  } else {
-    const isParts = nouhinState.product && nouhinState.product.isParts;
-    const colorText = isParts ? '' : ` ${nouhinState.color}`;
-    const unitText = isParts ? 'セット' : '枚';
-    btn.textContent = `納品を記録する ✅ ${nouhinState.product.code}${colorText} ×${nouhinState.quantity}${unitText}`;
-    btn.className = 'submit-btn ready';
-  }
+  const isParts = nouhinState.product && nouhinState.product.isParts;
+  const colorText = isParts ? '' : ` ${nouhinState.color}`;
+  const unitText = isParts ? 'セット' : '枚';
+  btn.textContent = `納品を記録する ✅ ${nouhinState.product.code}${colorText} ×${nouhinState.quantity}${unitText}`;
+  btn.className = 'submit-btn ready';
 }
 
 function submitNouhin() {
   if (!nouhinState.product) return;
-  if (nouhinState.checks.size !== NOUHIN_CHECKS.length) return;
+
+  const isParts = nouhinState.product.isParts;
+  const colorText = isParts ? '' : `\nカラー: ${nouhinState.color}`;
+  const unitText = isParts ? 'セット' : '枚';
+  const msg = `この内容で納品を記録しますか？\n\n`
+    + `👤 ${nouhinState.name}さん\n`
+    + `📦 ${nouhinState.product.code} ${nouhinState.product.name}${colorText}\n`
+    + `🔢 ${nouhinState.quantity}${unitText}`;
+  if (!confirm(msg)) return;
 
   const record = {
     date: new Date().toISOString(),
