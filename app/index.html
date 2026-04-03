@@ -712,6 +712,11 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <div class="color-grid" id="saidan-product-buttons"></div>
     </div>
 
+    <div class="form-section" id="saidan-size-section" style="display:none;">
+      <h3>サイズを選んでください</h3>
+      <div class="color-grid" id="saidan-size-buttons"></div>
+    </div>
+
     <div class="form-section" id="saidan-color-section" style="display:none;">
       <h3>カラーを選んでください</h3>
       <div class="color-grid" id="saidan-color-buttons"></div>
@@ -1745,7 +1750,7 @@ const SKU_NAMES = {
 const COLOR_NAMES = {
   'RD': 'レッド', 'MU': 'マスタード', 'BE': 'ベージュ', 'BR': 'カーキブラウン',
   'BL': 'ブルー', 'NA': 'ネイビー', 'SB': 'サンドベージュ', 'GY': 'チャコールグレー',
-  'BK': 'ブラック', 'WH': 'ホワイト', 'SP': 'ストライプ',
+  'BK': 'ブラック', 'WH': 'ホワイト', 'SP': 'スモークピンク',
   'OR': 'サーモンオレンジ', 'PK': 'ピンク', 'LV': 'ラベンダー', 'MT': 'ミント',
   'BST': 'ブルーストライプ', 'RST': 'レッドストライプ',
   'GCHE': 'グリーンチェック', 'HAT': 'ハット柄', 'DOT': 'ドット',
@@ -1759,15 +1764,36 @@ const COLOR_NAMES = {
 };
 function colorLabel(code) { return COLOR_NAMES[code] ? `${code} ${COLOR_NAMES[code]}` : code; }
 
-// 裁断用の全SKUGroupリスト（アルファベット順）
-const SAIDAN_SKUS = [
-  'APM','APS','CL','CUP','DO','FBM','FBOL',
-  'HA','IBL','IBM','IBSS','KM',
-  'LBL','LBM','LBS','LBSS',
-  'MASK','OMM','PNAP',
-  'SBL','SBM','SBDL','SBDM','SNAP',
-  'TAL','TAM','TP'
-].sort((a, b) => a.localeCompare(b, 'ja'));
+// 裁断用のSKUグループリスト（サイズ展開があるものはグループ化）
+const SAIDAN_GROUPS = [
+  { code: 'AP', name: 'エプロン巾着', sizes: ['APM', 'APS'] },
+  { code: 'CL', name: 'カトラリー巾着', sizes: [] },
+  { code: 'CUP', name: 'コップ袋', sizes: [] },
+  { code: 'DO', name: 'お道具袋', sizes: [] },
+  { code: 'FB', name: 'フリルバッグ', sizes: ['FBM', 'FBOL'] },
+  { code: 'HA', name: '歯磨き巾着', sizes: [] },
+  { code: 'IB', name: 'イラストバッグ', sizes: ['IBL', 'IBM', 'IBSS'] },
+  { code: 'KM', name: '給食袋', sizes: [] },
+  { code: 'LB', name: 'レッスンバッグ', sizes: ['LBL', 'LBM', 'LBS', 'LBSS'] },
+  { code: 'MASK', name: 'マスクカバー', sizes: [] },
+  { code: 'OMM', name: 'おむつ入れ', sizes: [] },
+  { code: 'PNAP', name: 'プチナップ', sizes: [] },
+  { code: 'SB', name: 'シューズバッグ', sizes: ['SBL', 'SBM'] },
+  { code: 'SBD', name: 'Dカンシューズバッグ', sizes: ['SBDL', 'SBDM'] },
+  { code: 'SNAP', name: 'ナップサック', sizes: [] },
+  { code: 'TA', name: '体操着袋', sizes: ['TAL', 'TAM'] },
+  { code: 'TP', name: 'ティッシュポケット', sizes: [] },
+].sort((a, b) => a.code.localeCompare(b.code, 'ja'));
+
+const SAIDAN_SIZE_LABELS = {
+  'APM': 'M', 'APS': 'S',
+  'FBM': 'M', 'FBOL': 'OL',
+  'IBL': 'L', 'IBM': 'M', 'IBSS': 'SS',
+  'LBL': 'L', 'LBM': 'M', 'LBS': 'S', 'LBSS': 'SS',
+  'SBL': 'L', 'SBM': 'M',
+  'SBDL': 'L', 'SBDM': 'M',
+  'TAL': 'L', 'TAM': 'M',
+};
 
 // 裁断で使うカテゴリ（B は裁断対象外）
 const SAIDAN_CATEGORIES = [
@@ -2442,17 +2468,20 @@ function startWork(type) {
   initWorkState(type);
 
   if (type === 'saidan') {
-    // 裁断：SKUGroupをアルファベット順でボタン表示
+    // 裁断：グループ名でボタン表示
     const grid = document.getElementById('saidan-product-buttons');
     grid.innerHTML = '';
-    SAIDAN_SKUS.forEach(sku => {
+    SAIDAN_GROUPS.forEach(g => {
       const btn = document.createElement('button');
       btn.className = 'color-btn';
-      btn.textContent = sku;
-      btn.onclick = () => selectSaidanProduct(sku, btn);
+      btn.textContent = g.code;
+      btn.style.fontSize = '14px';
+      btn.innerHTML = `<div style="font-weight:600;">${g.code}</div><div style="font-size:11px; color:#86868b;">${g.name}</div>`;
+      btn.onclick = () => selectSaidanGroup(g, btn);
       grid.appendChild(btn);
     });
     // セクション非表示リセット
+    document.getElementById('saidan-size-section').style.display = 'none';
     document.getElementById('saidan-color-section').style.display = 'none';
     document.getElementById('saidan-category-section').style.display = 'none';
     document.getElementById('saidan-part-section').style.display = 'none';
@@ -2483,16 +2512,48 @@ function startWork(type) {
   }
 }
 
-// 裁断専用：SKUGroup選択
-function selectSaidanProduct(sku, btn) {
+// 裁断専用：グループ選択
+function selectSaidanGroup(group, btn) {
+  document.querySelectorAll('#saidan-product-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+
+  // サイズ展開がある場合はサイズ選択画面へ
+  if (group.sizes && group.sizes.length > 0) {
+    const sizeSection = document.getElementById('saidan-size-section');
+    const sizeGrid = document.getElementById('saidan-size-buttons');
+    sizeSection.style.display = '';
+    sizeGrid.innerHTML = '';
+    group.sizes.forEach(sku => {
+      const sbtn = document.createElement('button');
+      sbtn.className = 'color-btn';
+      sbtn.textContent = SAIDAN_SIZE_LABELS[sku] || sku;
+      sbtn.onclick = () => {
+        document.querySelectorAll('#saidan-size-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+        sbtn.classList.add('selected');
+        selectSaidanSKU(sku);
+      };
+      sizeGrid.appendChild(sbtn);
+    });
+  } else {
+    // サイズなし：直接SKU選択
+    document.getElementById('saidan-size-section').style.display = 'none';
+    selectSaidanSKU(group.code);
+  }
+
+  // 下位セクション非表示
+  document.getElementById('saidan-color-section').style.display = 'none';
+  document.getElementById('saidan-category-section').style.display = 'none';
+  document.getElementById('saidan-part-section').style.display = 'none';
+  updateWorkBtn('saidan');
+}
+
+// 裁断専用：SKU確定後のカラー選択
+function selectSaidanSKU(sku) {
   workState.saidan.product = { code: sku, name: SKU_NAMES[sku] || sku };
   workState.saidan.color = '';
   workState.saidan.partCategory = '';
   workState.saidan.partName = '';
   workState.saidan.part = '';
-
-  document.querySelectorAll('#saidan-product-buttons .color-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
 
   // カラーボタン生成
   const colorSection = document.getElementById('saidan-color-section');
@@ -2500,7 +2561,6 @@ function selectSaidanProduct(sku, btn) {
   const colors = SKU_COLORS[sku] || [];
 
   if (colors.length === 0) {
-    // カラーがない場合（FBOL等）はスキップ
     colorSection.style.display = 'none';
     workState.saidan.color = '*';
     showSaidanCategories(sku, '*');
@@ -2521,7 +2581,6 @@ function selectSaidanProduct(sku, btn) {
     });
   }
 
-  // カテゴリ・パーツセクション非表示
   document.getElementById('saidan-category-section').style.display = 'none';
   document.getElementById('saidan-part-section').style.display = 'none';
   updateWorkBtn('saidan');
