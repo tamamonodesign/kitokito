@@ -3330,8 +3330,8 @@ function refreshProductionProgress() {
   const el = document.getElementById('megu-production-progress');
   if (!el) return;
 
-  const saidan = state.records.filter(r => r.type === '裁断完了');
-  const prints = state.records.filter(r => r.type === 'プリント完了');
+  const saidan = state.records.filter(r => r.type === '裁断完了' || r.type === '裁断');
+  const prints = state.records.filter(r => r.type === 'プリント完了' || r.type === 'プリント');
   const mochidashi = state.records.filter(r => r.type === '持ち出し');
   const nouhin = state.records.filter(r => r.type === '納品');
   const kenpin = state.records.filter(r => r.type === '検品完了');
@@ -3669,7 +3669,7 @@ function deleteCuttingMemo(id) {
 function refreshYamadaDash() {
   refreshCuttingMemos();
   // 最近の裁断記録
-  const saidan = state.records.filter(r => r.type === '裁断完了');
+  const saidan = state.records.filter(r => r.type === '裁断完了' || r.type === '裁断');
   const el1 = document.getElementById('yamada-recent-saidan');
   if (el1) {
     const recent = [...saidan].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
@@ -3688,7 +3688,7 @@ function refreshYamadaDash() {
   }
 
   // 最近のプリント記録
-  const prints = state.records.filter(r => r.type === 'プリント完了');
+  const prints = state.records.filter(r => r.type === 'プリント完了' || r.type === 'プリント');
   const el2 = document.getElementById('yamada-recent-print');
   if (el2) {
     const recent = [...prints].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
