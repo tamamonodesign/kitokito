@@ -647,10 +647,6 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
         <div class="icon">🖨</div>
         <div class="text">プリント完了</div>
       </button>
-      <button class="menu-btn" onclick="startWork('nyuko')">
-        <div class="icon">📥</div>
-        <div class="text">入庫する</div>
-      </button>
     </div>
 
   </div>
@@ -3737,15 +3733,64 @@ function refreshYamadaNyukoPending() {
   if (pending.length === 0) {
     el.innerHTML = '<div class="alert-card ok"><div class="alert-title">入庫待ちはありません</div></div>';
   } else {
-    el.innerHTML = pending.map(k => {
+    el.innerHTML = pending.map((k, idx) => {
       const dt = new Date(k.date);
       const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
-      return `<div class="alert-card">
-        <div class="alert-title">${k.name}さん ${k.product} ${k.color} OK:${k.quantityOk} <span class="badge orange">検品済み→入庫して</span></div>
-        <div class="alert-detail">${dateStr} 検品</div>
+      const isParts = k.color === 'なし';
+      const colorText = isParts ? '' : ` ${k.color}`;
+      const unitText = isParts ? 'セット' : '個';
+      const productName = k.productName || k.product;
+      return `<div class="alert-card" onclick='quickNyuko(${idx})' style="cursor:pointer;">
+        <div style="font-size:16px; font-weight:600;">${k.product}${colorText}</div>
+        <div style="font-size:13px; color:#86868b; margin-top:2px;">${productName}</div>
+        <div style="font-size:14px; margin-top:6px;">
+          👤 ${k.name}さん｜OK: <strong>${k.quantityOk}${unitText}</strong>
+          ${k.quantityBGrade > 0 ? `｜B品: ${k.quantityBGrade}${unitText}` : ''}
+          ${k.quantityRejected > 0 ? `｜不可: ${k.quantityRejected}${unitText}` : ''}
+        </div>
+        <div style="font-size:11px; color:#aeaeb2; margin-top:4px;">${dateStr} 検品</div>
+        <div style="margin-top:8px;"><span class="badge orange">タップして入庫</span></div>
       </div>`;
     }).join('');
   }
+}
+
+function quickNyuko(idx) {
+  const pending = getPendingKenpins();
+  if (idx < 0 || idx >= pending.length) return;
+  const k = pending[idx];
+
+  const isParts = k.color === 'なし';
+  const colorText = isParts ? '' : `\nカラー: ${k.color}`;
+  const unitText = isParts ? 'セット' : '個';
+  const productName = k.productName || k.product;
+
+  const msg = `この検品済み製品を入庫しますか？\n\n`
+    + `📦 ${k.product} ${productName}${colorText}\n`
+    + `👤 ${k.name}さん\n`
+    + `✅ OK: ${k.quantityOk}${unitText}\n`
+    + (k.quantityBGrade > 0 ? `⚠️ B品: ${k.quantityBGrade}${unitText}\n` : '')
+    + (k.quantityRejected > 0 ? `❌ 不可: ${k.quantityRejected}${unitText}\n` : '');
+  if (!confirm(msg)) return;
+
+  const record = {
+    date: new Date().toISOString(),
+    type: '入庫',
+    kenpinDate: k.date,
+    product: k.product,
+    productName: k.productName,
+    color: k.color,
+    quantity: k.quantityOk,
+    bGrade: k.quantityBGrade,
+    rejected: k.quantityRejected
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+  state.lastRecord = record;
+
+  alert(`入庫完了！\n${k.product} ${productName} OK:${k.quantityOk}${unitText}`);
+  refreshYamadaDash();
 }
 
 // Override showScreen to refresh dashboards
