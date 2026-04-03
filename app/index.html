@@ -2339,15 +2339,6 @@ function selectNouhinJob(job) {
     + `<div style="font-size:15px; margin-top:4px;">👤 ${job.name}さん｜${job.product}${colorText}｜${job.quantity}${unitText}</div>`
     + `<div style="font-size:12px; color:#aeaeb2; margin-top:2px;">${fmtDate(job.date)}</div>`;
 
-  // チェックリスト
-  const list = document.getElementById('nouhin-check-list');
-  list.innerHTML = '';
-  NOUHIN_CHECKS.forEach((item, i) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<div class="check-box" onclick="toggleNouhinCheck(this, ${i})"></div><span>${item}</span>`;
-    list.appendChild(li);
-  });
-
   updateNouhinBtn();
   showScreen('screen-nouhin-input');
 }
@@ -2356,12 +2347,6 @@ function changeNouhinQty(delta) {
   const max = nouhinState.sourceRecord ? nouhinState.sourceRecord.remaining : 999;
   nouhinState.quantity = Math.max(1, Math.min(max, nouhinState.quantity + delta));
   document.getElementById('nouhin-qty-input').value = nouhinState.quantity;
-}
-
-function toggleNouhinCheck(el, idx) {
-  if (nouhinState.checks.has(idx)) { nouhinState.checks.delete(idx); el.classList.remove('checked'); }
-  else { nouhinState.checks.add(idx); el.classList.add('checked'); }
-  updateNouhinBtn();
 }
 
 function updateNouhinBtn() {
@@ -2398,7 +2383,6 @@ function submitNouhin() {
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
   gasPost('add', { record });
 
-  const isParts = nouhinState.product.isParts;
   const nColorText = isParts ? '' : nouhinState.color;
   const nUnitText = isParts ? 'セット' : '枚';
   document.getElementById('nouhin-success-detail-lines').innerHTML =
