@@ -4443,7 +4443,21 @@ function refreshZentaiTable() {
 
   // Aggregate records per SKU
   const agg = {};
-  allSKUs.forEach(s => { agg[s.sku] = { mochidashi: 0, nouhin: 0, kenpinOk: 0, kenpinB: 0, kenpinRejected: 0, nyukoQty: 0, nyukoB: 0 }; });
+  allSKUs.forEach(s => { agg[s.sku] = { tanaoroshi: 0, mochidashi: 0, nouhin: 0, kenpinOk: 0, kenpinB: 0, kenpinRejected: 0, nyukoQty: 0, nyukoB: 0 }; });
+
+  // 棚卸し: SKUごとに最新の棚卸しデータを取得
+  const tanaLatest = {};
+  records.filter(r => r.type === '棚卸し').forEach(r => {
+    const colorCode = (r.color || '').split(' ')[0];
+    const key = r.product + '_' + colorCode;
+    if (!agg[key]) return;
+    if (!tanaLatest[key] || r.date > tanaLatest[key].date) {
+      tanaLatest[key] = { quantity: r.quantity || 0, date: r.date };
+    }
+  });
+  Object.entries(tanaLatest).forEach(([key, data]) => {
+    if (agg[key]) agg[key].tanaoroshi = data.quantity;
+  });
 
   records.forEach(r => {
     const colorCode = (r.color || '').split(' ')[0];
@@ -4490,6 +4504,7 @@ function refreshZentaiTable() {
   thead += '<th style="width:28px; padding:4px; font-size:10px;">入待</th>';
   thead += '<th style="width:28px; padding:4px; font-size:10px;">入庫</th>';
   thead += '<th style="width:28px; padding:4px; font-size:10px;">販売</th>';
+  thead += '<th style="width:32px; padding:4px; font-size:10px;">在庫</th>';
   thead += '<th style="width:22px; padding:4px; font-size:10px;">B</th>';
   thead += '<th style="width:22px; padding:4px; font-size:10px;">✕</th>';
   thead += '<th style="width:26px; padding:4px; font-size:10px;">材料</th>';
@@ -4537,6 +4552,10 @@ function refreshZentaiTable() {
     tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (waitNyuko || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:12px; font-weight:600;">' + (nyukoTotal || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (hanbai || '-') + '</td>';
+    const stock = a.tanaoroshi + nyukoTotal - hanbai;
+    const hasStockData = a.tanaoroshi || nyukoTotal || hanbai;
+    const stockStyle = stock < 0 ? 'color:#ff3b30; font-weight:700;' : stock <= 3 ? 'color:#ff9500; font-weight:600;' : 'color:#34c759; font-weight:600;';
+    tbody += '<td class="num" style="padding:4px; font-size:12px; ' + stockStyle + '">' + (hasStockData ? stock : '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff9500;">' + (bGrade || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff3b30;">' + (rejected || '-') + '</td>';
     const partsData = encodeURIComponent(JSON.stringify(mat.parts));
@@ -4547,7 +4566,7 @@ function refreshZentaiTable() {
   });
 
   if (!tbody) {
-    tbody = '<tr><td colspan="9" style="text-align:center; color:#86868b; padding:24px;">データがありません</td></tr>';
+    tbody = '<tr><td colspan="10" style="text-align:center; color:#86868b; padding:24px;">データがありません</td></tr>';
   }
 
   table.querySelector('thead').innerHTML = thead;
