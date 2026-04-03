@@ -206,7 +206,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
         <div class="role-name">製造管理</div>
         <div class="role-desc">急ぎ・進行中・次の仕事</div>
       </button>
-      <button class="role-btn" onclick="showScreen('screen-dash-kenpin')">
+      <button class="role-btn" onclick="startKenpin()">
         <div class="role-icon">🔍</div>
         <div class="role-name">検品</div>
         <div class="role-desc">納品された製品の検品</div>
@@ -548,7 +548,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
   <!-- ========== 検品：検品待ちリスト ========== -->
   <div id="screen-kenpin-list" class="hidden">
-    <button class="back-btn" onclick="showScreen('screen-dash-kenpin')">← もどる</button>
+    <button class="back-btn" onclick="showScreen('screen-top')">← もどる</button>
     <h1>🔍 検品する</h1>
     <p class="subtitle">検品する納品を選んでください</p>
     <div id="kenpin-no-pending" class="no-pending" style="display:none;">検品待ちの納品はありません</div>
@@ -611,7 +611,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <div style="text-align:center; margin-top:20px;">
       <button onclick="startKenpin()" style="background:#007aff; color:white; border:none; border-radius:12px; padding:14px 32px; font-size:16px; font-weight:600; cursor:pointer;">次の検品へ</button>
       <div style="margin-top:12px;">
-        <button onclick="showScreen('screen-dash-kenpin')" style="background:none; border:none; color:#007aff; font-size:14px; cursor:pointer;">検品ダッシュボードへ戻る</button>
+        <button onclick="showScreen('screen-top')" style="background:none; border:none; color:#007aff; font-size:14px; cursor:pointer;">トップへ戻る</button>
       </div>
     </div>
   </div>
@@ -2699,7 +2699,7 @@ function workSuccessBack() {
   if (workSuccessFrom === 'screen-dash-megu') {
     showScreen('screen-dash-megu');
   } else if (workSuccessFrom === 'screen-dash-kenpin') {
-    showScreen('screen-dash-kenpin');
+    startKenpin();
   } else if (workSuccessFrom === 'screen-nyuko') {
     startNyuko();
   } else {
