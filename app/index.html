@@ -472,6 +472,22 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
     <!-- Tab 3: 販売数 -->
     <div class="dash-tab-content" id="dash-tab-hanbai">
+      <!-- CSV インポート -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <label style="display:inline-flex; align-items:center; gap:6px; padding:10px 16px; background:#0071e3; color:white; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">
+            📂 ごくーCSV取込
+            <input type="file" accept=".csv" id="csv-file-input" onchange="handleCSVImport(this)" style="display:none;">
+          </label>
+          <span id="csv-import-status" style="font-size:13px; color:#86868b;"></span>
+        </div>
+        <div id="csv-preview" style="display:none; margin-top:12px;"></div>
+      </div>
+
+      <!-- 販売履歴 -->
+      <div id="hanbai-history" style="margin-bottom:16px;"></div>
+
+      <!-- 販売数テーブル -->
       <div class="table-scroll-wrapper">
         <table class="hanbai-table" id="hanbai-table">
           <thead></thead>
@@ -1976,6 +1992,9 @@ const PRODUCTS = [
   { code: 'MASK', name: 'マスクカバー', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/b923f218687cf4b5d43e46c3421809c0.jpg',
     colors: ['N ノーマル', 'W ワイド'],
     parts: ['表地 ×1', 'スナップボタン ×2'] },
+  { code: 'CC', name: 'カードケース',
+    colors: ['BK ブラック', 'GY グレー'],
+    parts: ['表地 ×1'] },
 ];
 
 // パーツ制作（内職用）
@@ -2072,11 +2091,14 @@ async function syncFromGAS() {
   const records = await gasGet();
   if (records) {
     // _rowNum を除去してからlocalStorageに保存
-    state.records = records.map(r => {
+    const gasRecords = records.map(r => {
       const clean = {...r};
       delete clean._rowNum;
       return clean;
     });
+    // ローカルのみのレコード（販売CSV等）を保持してマージ
+    const localOnlyRecords = state.records.filter(r => r.type === '販売');
+    state.records = [...gasRecords, ...localOnlyRecords];
     localStorage.setItem('kitokito_records', JSON.stringify(state.records));
     showSyncStatus('synced');
     // 現在表示中のダッシュボードを更新
@@ -4441,6 +4463,7 @@ function refreshZentaiTable() {
   });
 
   const hanbaiData = calcHanbaiData();
+  const directSales = getDirectSalesTotals();
 
   // 生産目標データをSKU→target のマップに(生産グループ単位)
   const targetMap = {};
@@ -4481,7 +4504,7 @@ function refreshZentaiTable() {
     const bGrade = a.kenpinB + a.nyukoB;
     const rejected = a.kenpinRejected;
     const nyukoTotal = a.nyukoQty;
-    const hanbai = hanbaiData.totals[s.sku] || 0;
+    const hanbai = (hanbaiData.totals[s.sku] || 0) + (directSales[s.sku] || 0);
 
     // 生産目標を取得（生産グループから）
     const pg = s.sku; // 基本は SKU = PG
@@ -4699,42 +4722,350 @@ function refreshHanbaiSheet() {
   const table = document.getElementById('hanbai-table');
   if (!table) return;
 
+  refreshHanbaiHistory();
+
   const hanbai = calcHanbaiData();
+  const directSales = getDirectSalesTotals();
   const months = hanbai.months;
+  const hasMonthData = months.length >= 2;
+  const salesMonths = hasMonthData ? months.slice(1) : [];
 
-  if (months.length < 2) {
-    table.querySelector('thead').innerHTML = '';
-    table.querySelector('tbody').innerHTML = '<tr><td style="text-align:center; color:#86868b; padding:24px;">販売数の計算には少なくとも2ヶ月分の棚卸しデータが必要です。</td></tr>';
-    return;
+  let thead = '<tr><th>SKU</th><th>CSV販売</th>';
+  if (hasMonthData) {
+    thead += '<th>棚卸差分</th>';
+    salesMonths.forEach(m => { thead += `<th>${m}</th>`; });
   }
-
-  // Only show months from index 1 onward (sales are calculated from month[1])
-  const salesMonths = months.slice(1);
-
-  let thead = '<tr><th>SKU</th><th>販売総数</th>';
-  salesMonths.forEach(m => { thead += `<th>${m}</th>`; });
-  thead += '</tr>';
+  thead += '<th>合計</th></tr>';
 
   let tbody = '';
   const allSKUs = generateAllSKUs();
   allSKUs.forEach(s => {
-    const data = hanbai.skuData[s.sku];
-    if (!data || data.total === 0) return;
+    const csvQty = directSales[s.sku] || 0;
+    const tanaData = hanbai.skuData[s.sku];
+    const tanaTotal = tanaData ? tanaData.total : 0;
+    const total = csvQty + tanaTotal;
+    if (total === 0) return;
+
     tbody += `<tr><td style="text-align:left; font-weight:600;">${s.sku}</td>`;
-    tbody += `<td style="font-weight:700;">${data.total}</td>`;
-    salesMonths.forEach(m => {
-      const v = data.monthValues[m];
-      tbody += `<td>${v !== undefined ? v : '-'}</td>`;
-    });
+    tbody += `<td style="color:#0071e3; font-weight:600;">${csvQty || '-'}</td>`;
+    if (hasMonthData) {
+      tbody += `<td>${tanaTotal || '-'}</td>`;
+      salesMonths.forEach(m => {
+        const v = tanaData ? tanaData.monthValues[m] : undefined;
+        tbody += `<td>${v !== undefined ? v : '-'}</td>`;
+      });
+    }
+    tbody += `<td style="font-weight:700;">${total}</td>`;
     tbody += '</tr>';
   });
 
   if (!tbody) {
-    tbody = '<tr><td colspan="' + (salesMonths.length + 2) + '" style="text-align:center; color:#86868b; padding:24px;">販売データがありません</td></tr>';
+    const colspan = hasMonthData ? salesMonths.length + 4 : 3;
+    tbody = '<tr><td colspan="' + colspan + '" style="text-align:center; color:#86868b; padding:24px;">販売データがありません。CSVを取り込むか、棚卸しデータを2ヶ月分入力してください。</td></tr>';
   }
 
   table.querySelector('thead').innerHTML = thead;
   table.querySelector('tbody').innerHTML = tbody;
+}
+
+// ===== ごくーCSVインポート =====
+
+// SKU正規化：ごくーの商品コード → KITOKITOアプリのSKU
+function normalizeGokuuSKU(code) {
+  let sku = code.trim().toUpperCase().replace(/-/g, '_');
+  // オプション接尾辞を除去（在庫は同じ商品）
+  sku = sku.replace(/_OP$/, '');
+  // ショルダー付きは基本SKUに統合（LBL_BL_SHO → LBL_BL）
+  sku = sku.replace(/_SHO$/, '');
+  return sku;
+}
+
+// CSV SKU展開：1つのCSVコードが複数の在庫アイテムに対応する場合を展開
+// 返り値: [{ sku, qty }] の配列。空配列＝スキップ対象
+function expandCSVSKU(normalizedCode) {
+  // CC セット展開
+  if (normalizedCode === 'CC_1BK') return [{ sku: 'CC_BK', qty: 1 }];
+  if (normalizedCode === 'CC_1GY') return [{ sku: 'CC_GY', qty: 1 }];
+  if (normalizedCode === 'CC_2BK') return [{ sku: 'CC_BK', qty: 2 }];
+  if (normalizedCode === 'CC_2GY') return [{ sku: 'CC_GY', qty: 2 }];
+  if (normalizedCode === 'CC_1BK1GY') return [{ sku: 'CC_BK', qty: 1 }, { sku: 'CC_GY', qty: 1 }];
+
+  // DOGB → IBSS_KI（ボディが同じ）
+  if (/^DOGB_/.test(normalizedCode) || normalizedCode === 'DOGB') return [{ sku: 'IBSS_KI', qty: 1 }];
+
+  // GIFTBAG → スキップ（管理不要）
+  if (/^GIFTBAG/.test(normalizedCode)) return [];
+
+  // その他はそのまま
+  return [{ sku: normalizedCode, qty: 1 }];
+}
+
+// CSVをShift-JISとして読み込みパース
+async function handleCSVImport(fileInput) {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('csv-import-status');
+  const previewEl = document.getElementById('csv-preview');
+  statusEl.textContent = '読み込み中...';
+
+  try {
+    // Shift-JIS読み込み
+    const buffer = await file.arrayBuffer();
+    let text;
+    try {
+      const decoder = new TextDecoder('shift_jis');
+      text = decoder.decode(buffer);
+    } catch(e) {
+      text = await file.text(); // fallback UTF-8
+    }
+
+    // CSVパース（ダブルクォート内の改行・カンマ対応）
+    const rows = parseCSV(text);
+    if (rows.length < 2) { statusEl.textContent = 'データが空です'; return; }
+
+    // ヘッダー確認
+    const header = rows[0].map(h => h.trim());
+    const codeIdx = header.indexOf('商品コード');
+    const qtyIdx = header.indexOf('数量');
+    if (codeIdx < 0 || qtyIdx < 0) {
+      statusEl.textContent = '「商品コード」「数量」列が見つかりません';
+      return;
+    }
+
+    // SKU集計
+    const skuTotals = {};
+    const unmapped = {};
+    let shoulderCount = 0; // _SHO付きの総数（ショルダーベルト消費数）
+    const allSKUs = generateAllSKUs();
+    const validSKUSet = new Set(allSKUs.map(s => s.sku));
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.length <= Math.max(codeIdx, qtyIdx)) continue;
+      const rawCode = row[codeIdx].trim();
+      const qty = parseInt(row[qtyIdx]) || 0;
+      if (!rawCode || qty <= 0) continue;
+
+      const normalized = rawCode.trim().toUpperCase().replace(/-/g, '_');
+      const isShoulder = /_SHO$/.test(normalized);
+      if (isShoulder) shoulderCount += qty;
+
+      const baseSKU = normalizeGokuuSKU(rawCode);
+      const expanded = expandCSVSKU(baseSKU);
+
+      // 空配列 = スキップ対象（GIFTBAG等）
+      if (expanded.length === 0) continue;
+
+      expanded.forEach(item => {
+        if (validSKUSet.has(item.sku)) {
+          skuTotals[item.sku] = (skuTotals[item.sku] || 0) + item.qty * qty;
+        } else {
+          unmapped[rawCode] = (unmapped[rawCode] || 0) + item.qty * qty;
+        }
+      });
+    }
+
+    const totalQty = Object.values(skuTotals).reduce((a, b) => a + b, 0);
+    const skuCount = Object.keys(skuTotals).length;
+    const unmappedCount = Object.values(unmapped).reduce((a, b) => a + b, 0);
+
+    // プレビュー表示
+    let html = '<div style="background:white; border-radius:12px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08);">';
+    html += '<div style="font-weight:600; font-size:15px; margin-bottom:8px;">📋 インポートプレビュー</div>';
+    html += `<div style="font-size:13px; color:#1d1d1f; margin-bottom:4px;">✅ マッチ: <b>${skuCount}SKU / ${totalQty}個</b></div>`;
+    if (shoulderCount > 0) {
+      html += `<div style="font-size:13px; color:#0071e3; margin-bottom:4px;">🎒 ショルダー付き: ${shoulderCount}本 → ショルダーベルト(K003) ${shoulderCount}本消費として記録</div>`;
+    }
+    if (unmappedCount > 0) {
+      html += `<div style="font-size:13px; color:#ff9500; margin-bottom:4px;">⚠️ 未登録: ${Object.keys(unmapped).length}件 / ${unmappedCount}個（${Object.keys(unmapped).join(', ')}）</div>`;
+    }
+
+    // SKU一覧テーブル
+    html += '<div style="max-height:200px; overflow-y:auto; margin-top:8px;">';
+    html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+    html += '<tr style="background:#f5f5f7;"><th style="text-align:left; padding:4px 8px;">SKU</th><th style="text-align:right; padding:4px 8px;">数量</th></tr>';
+    Object.keys(skuTotals).sort().forEach(sku => {
+      html += `<tr><td style="padding:3px 8px; border-bottom:1px solid #f0f0f0;">${sku}</td><td style="text-align:right; padding:3px 8px; border-bottom:1px solid #f0f0f0;">${skuTotals[sku]}</td></tr>`;
+    });
+    html += '</table></div>';
+
+    html += '<div style="display:flex; gap:8px; margin-top:12px;">';
+    html += '<button onclick="confirmCSVImport()" class="submit-btn ready" style="padding:12px; font-size:14px; flex:1;">確定して取り込む</button>';
+    html += '<button onclick="cancelCSVImport()" style="padding:12px; font-size:14px; flex:0 0 auto; border:1px solid #e5e5ea; border-radius:14px; background:white; cursor:pointer;">キャンセル</button>';
+    html += '</div></div>';
+
+    previewEl.innerHTML = html;
+    previewEl.style.display = 'block';
+    statusEl.textContent = '';
+
+    // 一時保存（確定ボタンで使う）
+    window._pendingCSVImport = { skuTotals, fileName: file.name, unmapped, shoulderCount };
+
+  } catch(e) {
+    statusEl.textContent = 'エラー: ' + e.message;
+    console.error('CSV import error:', e);
+  }
+  // ファイル入力をリセット（同じファイルの再選択を可能に）
+  fileInput.value = '';
+}
+
+// CSVパーサー（RFC 4180準拠：ダブルクォート内の改行・カンマ対応）
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuote) {
+      if (c === '"') {
+        if (i + 1 < text.length && text[i + 1] === '"') {
+          field += '"'; i++;
+        } else {
+          inQuote = false;
+        }
+      } else {
+        field += c;
+      }
+    } else {
+      if (c === '"') {
+        inQuote = true;
+      } else if (c === ',') {
+        row.push(field); field = '';
+      } else if (c === '\r') {
+        // skip
+      } else if (c === '\n') {
+        row.push(field); field = '';
+        rows.push(row); row = [];
+      } else {
+        field += c;
+      }
+    }
+  }
+  if (field || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+// CSVインポート確定
+function confirmCSVImport() {
+  const data = window._pendingCSVImport;
+  if (!data) return;
+
+  const now = new Date().toISOString();
+  const importId = 'CSV_' + Date.now();
+
+  // 販売レコードとして登録
+  const allSKUs = generateAllSKUs();
+  Object.entries(data.skuTotals).forEach(([sku, qty]) => {
+    const match = allSKUs.find(s => s.sku === sku);
+    const parts = sku.split('_');
+    const productCode = match ? match.productCode : parts[0];
+    const colorCode = match ? match.colorCode : parts.slice(1).join('_');
+
+    state.records.push({
+      date: now,
+      type: '販売',
+      product: productCode,
+      color: colorCode,
+      quantity: qty,
+      source: 'ごくーCSV',
+      importId: importId,
+      fileName: data.fileName
+    });
+  });
+
+  // ショルダーベルト(K003)消費を自動記録
+  if (data.shoulderCount > 0) {
+    state.records.push({
+      date: now,
+      type: '販売',
+      product: 'K003',
+      productName: 'ショルダーベルト',
+      color: '',
+      quantity: data.shoulderCount,
+      source: 'ごくーCSV（SHO自動）',
+      importId: importId,
+      fileName: data.fileName
+    });
+  }
+
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('addBatch', { records: state.records.filter(r => r.importId === importId) });
+
+  // UI更新
+  document.getElementById('csv-preview').style.display = 'none';
+  let statusMsg = Object.values(data.skuTotals).reduce((a, b) => a + b, 0) + '個を取り込みました';
+  if (data.shoulderCount > 0) statusMsg += `（ショルダーベルト ${data.shoulderCount}本消費を記録）`;
+  document.getElementById('csv-import-status').innerHTML =
+    '<span style="color:#34c759;">✅ ' + statusMsg + '</span>';
+  window._pendingCSVImport = null;
+
+  refreshHanbaiSheet();
+  refreshHanbaiHistory();
+  refreshZentaiTable();
+}
+
+function cancelCSVImport() {
+  document.getElementById('csv-preview').style.display = 'none';
+  document.getElementById('csv-import-status').textContent = '';
+  window._pendingCSVImport = null;
+}
+
+// 販売データの合計を取得（直接入力 + CSV + 棚卸し差分）
+function getDirectSalesTotals() {
+  const totals = {};
+  state.records.filter(r => r.type === '販売').forEach(r => {
+    const sku = r.product + '_' + (r.color || '').split(' ')[0];
+    totals[sku] = (totals[sku] || 0) + (r.quantity || 0);
+  });
+  return totals;
+}
+
+// 販売履歴（インポート単位でまとめて表示＋取消ボタン）
+function refreshHanbaiHistory() {
+  const el = document.getElementById('hanbai-history');
+  if (!el) return;
+
+  // importId でグループ化
+  const salesRecords = state.records.filter(r => r.type === '販売');
+  const groups = {};
+  salesRecords.forEach(r => {
+    const gid = r.importId || 'manual_' + r.date;
+    if (!groups[gid]) groups[gid] = { records: [], date: r.date, source: r.source || '手入力', fileName: r.fileName || '' };
+    groups[gid].records.push(r);
+  });
+
+  const groupKeys = Object.keys(groups).sort((a, b) => groups[b].date.localeCompare(groups[a].date));
+  if (groupKeys.length === 0) { el.innerHTML = ''; return; }
+
+  let html = '<div style="font-size:14px; font-weight:600; margin-bottom:8px;">📝 取込履歴</div>';
+  groupKeys.forEach(gid => {
+    const g = groups[gid];
+    const totalQty = g.records.reduce((s, r) => s + (r.quantity || 0), 0);
+    const skuCount = new Set(g.records.map(r => r.product + '_' + r.color)).size;
+    const dateStr = new Date(g.date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    html += '<div style="background:white; border-radius:10px; padding:10px 14px; margin-bottom:6px; box-shadow:0 1px 4px rgba(0,0,0,0.06); display:flex; justify-content:space-between; align-items:center;">';
+    html += '<div>';
+    html += `<div style="font-size:13px; font-weight:600;">${g.source} ${g.fileName ? '(' + g.fileName + ')' : ''}</div>`;
+    html += `<div style="font-size:12px; color:#86868b;">${dateStr} — ${skuCount}SKU / ${totalQty}個</div>`;
+    html += '</div>';
+    html += `<button onclick="undoSalesImport('${gid}')" style="padding:6px 12px; border:1px solid #ff3b30; border-radius:8px; background:white; color:#ff3b30; font-size:12px; font-weight:600; cursor:pointer;">取消</button>`;
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function undoSalesImport(importId) {
+  if (!confirm('この販売データを取り消しますか？')) return;
+  state.records = state.records.filter(r => {
+    if (r.type !== '販売') return true;
+    const gid = r.importId || 'manual_' + r.date;
+    return gid !== importId;
+  });
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  refreshHanbaiSheet();
+  refreshHanbaiHistory();
+  refreshZentaiTable();
 }
 
 // ===== refreshMeguDash を拡張 =====
