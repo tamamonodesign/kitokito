@@ -4459,7 +4459,10 @@ function refreshZentaiTable() {
     }
   });
   Object.entries(tanaLatest).forEach(([key, data]) => {
-    if (agg[key]) agg[key].tanaoroshi = data.quantity;
+    if (agg[key]) {
+      agg[key].tanaoroshi = data.quantity;
+      agg[key].tanaDate = data.date;
+    }
   });
 
   records.forEach(r => {
@@ -4474,7 +4477,11 @@ function refreshZentaiTable() {
       agg[key].kenpinRejected += (r.rejected || 0);
     }
     if (r.type === '入庫') {
-      agg[key].nyukoQty += (r.quantity || 0);
+      // 棚卸し以降の入庫のみカウント
+      const tanaDate = agg[key].tanaDate;
+      if (!tanaDate || r.date > tanaDate) {
+        agg[key].nyukoQty += (r.quantity || 0);
+      }
       agg[key].nyukoB += (r.bGrade || 0);
     }
   });
@@ -4522,7 +4529,19 @@ function refreshZentaiTable() {
     const bGrade = a.kenpinB + a.nyukoB;
     const rejected = a.kenpinRejected;
     const nyukoTotal = a.nyukoQty;
-    const hanbai = (hanbaiData.totals[s.sku] || 0) + (directSales[s.sku] || 0);
+    // 販売: 棚卸し以降のCSV販売のみカウント
+    const tanaDate = a.tanaDate || '';
+    let csvSales = 0;
+    state.records.filter(r => r.type === '販売').forEach(r => {
+      const rSku = r.product + '_' + (r.color || '').split(' ')[0];
+      if (rSku !== s.sku) return;
+      // periodToがある場合はperiodToで判定、なければdateで判定
+      const salesDate = r.periodTo || r.date || '';
+      if (!tanaDate || salesDate > tanaDate) {
+        csvSales += (r.quantity || 0);
+      }
+    });
+    const hanbai = (hanbaiData.totals[s.sku] || 0) + csvSales;
 
     // 生産目標を取得（生産グループから）
     const pg = s.sku; // 基本は SKU = PG
