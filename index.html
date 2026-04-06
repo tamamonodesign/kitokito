@@ -2614,10 +2614,15 @@ function selectSaidanGroup(group, btn) {
   } else {
     // サイズなし：直接SKU選択
     document.getElementById('saidan-size-section').style.display = 'none';
+    // 下位セクション非表示（selectSaidanSKUで再表示される）
+    document.getElementById('saidan-color-section').style.display = 'none';
+    document.getElementById('saidan-category-section').style.display = 'none';
+    document.getElementById('saidan-part-section').style.display = 'none';
     selectSaidanSKU(group.code);
+    return;
   }
 
-  // 下位セクション非表示
+  // サイズ展開がある場合：下位セクション非表示
   document.getElementById('saidan-color-section').style.display = 'none';
   document.getElementById('saidan-category-section').style.display = 'none';
   document.getElementById('saidan-part-section').style.display = 'none';
