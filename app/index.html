@@ -605,6 +605,20 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
             <button class="qty-btn plus" onclick="changeKenpinQty('bgrade', 1)">+</button>
           </div>
         </div>
+        <div id="kenpin-bgrade-cause" style="display:none; padding:4px 0 8px 16px;">
+          <div style="font-size:12px; color:#86868b; margin-bottom:6px;">原因の内訳</div>
+          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+              🧵 縫製ミス
+              <input type="number" class="qty-input" id="kenpin-bgrade-sewing" min="0" value="0" style="width:50px; font-size:14px; padding:4px;" onchange="syncKenpinCause('bgrade')">
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+              🪡 生地原因
+              <input type="number" class="qty-input" id="kenpin-bgrade-fabric" min="0" value="0" style="width:50px; font-size:14px; padding:4px;" onchange="syncKenpinCause('bgrade')">
+            </label>
+          </div>
+          <div id="kenpin-bgrade-cause-warn" style="display:none; font-size:11px; color:#ff3b30; margin-top:4px;"></div>
+        </div>
         <div class="bgrade-row">
           <span class="bgrade-label">不可（廃棄）</span>
           <div class="bgrade-qty">
@@ -612,6 +626,20 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
             <input type="number" class="qty-input" id="kenpin-rejected-input" min="0" value="0" onchange="syncKenpinFromInput('rejected')">
             <button class="qty-btn plus" onclick="changeKenpinQty('rejected', 1)">+</button>
           </div>
+        </div>
+        <div id="kenpin-rejected-cause" style="display:none; padding:4px 0 8px 16px;">
+          <div style="font-size:12px; color:#86868b; margin-bottom:6px;">原因の内訳</div>
+          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+              🧵 縫製ミス
+              <input type="number" class="qty-input" id="kenpin-rejected-sewing" min="0" value="0" style="width:50px; font-size:14px; padding:4px;" onchange="syncKenpinCause('rejected')">
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+              🪡 生地原因
+              <input type="number" class="qty-input" id="kenpin-rejected-fabric" min="0" value="0" style="width:50px; font-size:14px; padding:4px;" onchange="syncKenpinCause('rejected')">
+            </label>
+          </div>
+          <div id="kenpin-rejected-cause-warn" style="display:none; font-size:11px; color:#ff3b30; margin-top:4px;"></div>
         </div>
       </div>
     </div>
@@ -3043,7 +3071,7 @@ function submitArrive() {
 }
 
 // ===== 検品フロー =====
-let kenpinState = { selectedDelivery: null, quantityOk: 0, quantityBGrade: 0, quantityRejected: 0 };
+let kenpinState = { selectedDelivery: null, quantityOk: 0, quantityBGrade: 0, quantityRejected: 0, bgradeSewing: 0, bgradeFabric: 0, rejectedSewing: 0, rejectedFabric: 0 };
 
 function getPendingDeliveries() {
   const deliveries = state.records.filter(r => r.type === '納品');
@@ -3112,6 +3140,10 @@ function selectKenpinDelivery(delivery) {
   kenpinState.quantityOk = parseInt(delivery.quantity) || 0;
   kenpinState.quantityBGrade = 0;
   kenpinState.quantityRejected = 0;
+  kenpinState.bgradeSewing = 0;
+  kenpinState.bgradeFabric = 0;
+  kenpinState.rejectedSewing = 0;
+  kenpinState.rejectedFabric = 0;
 
   const isParts = delivery.color === 'なし';
   const colorText = isParts ? '' : ` ${delivery.color}`;
@@ -3128,6 +3160,14 @@ function selectKenpinDelivery(delivery) {
   document.getElementById('kenpin-ok-input').value = kenpinState.quantityOk;
   document.getElementById('kenpin-bgrade-input').value = kenpinState.quantityBGrade;
   document.getElementById('kenpin-rejected-input').value = kenpinState.quantityRejected;
+
+  // 原因入力エリアを初期化・非表示
+  document.getElementById('kenpin-bgrade-cause').style.display = 'none';
+  document.getElementById('kenpin-rejected-cause').style.display = 'none';
+  document.getElementById('kenpin-bgrade-sewing').value = 0;
+  document.getElementById('kenpin-bgrade-fabric').value = 0;
+  document.getElementById('kenpin-rejected-sewing').value = 0;
+  document.getElementById('kenpin-rejected-fabric').value = 0;
 
   updateKenpinBtn();
   showScreen('screen-kenpin-input');
@@ -3169,6 +3209,7 @@ function changeKenpinQty(field, delta) {
   document.getElementById('kenpin-ok-input').value = kenpinState.quantityOk;
   document.getElementById('kenpin-bgrade-input').value = kenpinState.quantityBGrade;
   document.getElementById('kenpin-rejected-input').value = kenpinState.quantityRejected;
+  updateKenpinCauseVisibility();
   updateKenpinBtn();
 }
 
@@ -3187,7 +3228,67 @@ function syncKenpinFromInput(field) {
   document.getElementById('kenpin-ok-input').value = kenpinState.quantityOk;
   document.getElementById('kenpin-bgrade-input').value = kenpinState.quantityBGrade;
   document.getElementById('kenpin-rejected-input').value = kenpinState.quantityRejected;
+  updateKenpinCauseVisibility();
   updateKenpinBtn();
+}
+
+function updateKenpinCauseVisibility() {
+  // B品の原因入力エリア
+  const bgCause = document.getElementById('kenpin-bgrade-cause');
+  if (kenpinState.quantityBGrade > 0) {
+    bgCause.style.display = 'block';
+  } else {
+    bgCause.style.display = 'none';
+    kenpinState.bgradeSewing = 0;
+    kenpinState.bgradeFabric = 0;
+    document.getElementById('kenpin-bgrade-sewing').value = 0;
+    document.getElementById('kenpin-bgrade-fabric').value = 0;
+  }
+  // 不可の原因入力エリア
+  const rejCause = document.getElementById('kenpin-rejected-cause');
+  if (kenpinState.quantityRejected > 0) {
+    rejCause.style.display = 'block';
+  } else {
+    rejCause.style.display = 'none';
+    kenpinState.rejectedSewing = 0;
+    kenpinState.rejectedFabric = 0;
+    document.getElementById('kenpin-rejected-sewing').value = 0;
+    document.getElementById('kenpin-rejected-fabric').value = 0;
+  }
+  // 警告の更新
+  updateKenpinCauseWarning('bgrade');
+  updateKenpinCauseWarning('rejected');
+}
+
+function syncKenpinCause(type) {
+  const sewing = Math.max(0, parseInt(document.getElementById(`kenpin-${type}-sewing`).value) || 0);
+  const fabric = Math.max(0, parseInt(document.getElementById(`kenpin-${type}-fabric`).value) || 0);
+  const total = type === 'bgrade' ? kenpinState.quantityBGrade : kenpinState.quantityRejected;
+
+  if (type === 'bgrade') {
+    kenpinState.bgradeSewing = Math.min(sewing, total);
+    kenpinState.bgradeFabric = Math.min(fabric, total - kenpinState.bgradeSewing);
+  } else {
+    kenpinState.rejectedSewing = Math.min(sewing, total);
+    kenpinState.rejectedFabric = Math.min(fabric, total - kenpinState.rejectedSewing);
+  }
+  document.getElementById(`kenpin-${type}-sewing`).value = type === 'bgrade' ? kenpinState.bgradeSewing : kenpinState.rejectedSewing;
+  document.getElementById(`kenpin-${type}-fabric`).value = type === 'bgrade' ? kenpinState.bgradeFabric : kenpinState.rejectedFabric;
+  updateKenpinCauseWarning(type);
+  updateKenpinBtn();
+}
+
+function updateKenpinCauseWarning(type) {
+  const total = type === 'bgrade' ? kenpinState.quantityBGrade : kenpinState.quantityRejected;
+  const sewing = type === 'bgrade' ? kenpinState.bgradeSewing : kenpinState.rejectedSewing;
+  const fabric = type === 'bgrade' ? kenpinState.bgradeFabric : kenpinState.rejectedFabric;
+  const warn = document.getElementById(`kenpin-${type}-cause-warn`);
+  if (total > 0 && sewing + fabric !== total) {
+    warn.style.display = 'block';
+    warn.textContent = `⚠ 合計が一致しません（${sewing + fabric}/${total}）`;
+  } else {
+    warn.style.display = 'none';
+  }
 }
 
 function updateKenpinBtn() {
@@ -3199,8 +3300,16 @@ function updateKenpinBtn() {
     const d = kenpinState.selectedDelivery;
     const isParts = d.color === 'なし';
     const colorText = isParts ? '' : ` ${d.color}`;
-    btn.textContent = `検品完了 ✅ ${d.product}${colorText} OK:${kenpinState.quantityOk} B:${kenpinState.quantityBGrade} 不可:${kenpinState.quantityRejected}`;
-    btn.className = 'submit-btn ready';
+    // 原因内訳チェック
+    const bgCauseOk = kenpinState.quantityBGrade === 0 || (kenpinState.bgradeSewing + kenpinState.bgradeFabric === kenpinState.quantityBGrade);
+    const rejCauseOk = kenpinState.quantityRejected === 0 || (kenpinState.rejectedSewing + kenpinState.rejectedFabric === kenpinState.quantityRejected);
+    if (!bgCauseOk || !rejCauseOk) {
+      btn.textContent = '原因の内訳を入力してください';
+      btn.className = 'submit-btn not-ready';
+    } else {
+      btn.textContent = `検品完了 ✅ ${d.product}${colorText} OK:${kenpinState.quantityOk} B:${kenpinState.quantityBGrade} 不可:${kenpinState.quantityRejected}`;
+      btn.className = 'submit-btn ready';
+    }
   }
 }
 
@@ -3211,12 +3320,20 @@ function submitKenpin() {
   const colorText = isParts ? '' : `\nカラー: ${d.color}`;
   const unitText = isParts ? 'セット' : '枚';
 
+  let causeDetail = '';
+  if (kenpinState.quantityBGrade > 0) {
+    causeDetail += `\n  B品内訳: 縫製ミス${kenpinState.bgradeSewing} / 生地原因${kenpinState.bgradeFabric}`;
+  }
+  if (kenpinState.quantityRejected > 0) {
+    causeDetail += `\n  不可内訳: 縫製ミス${kenpinState.rejectedSewing} / 生地原因${kenpinState.rejectedFabric}`;
+  }
   const msg = `この内容で検品を記録しますか？\n\n`
     + `👤 ${d.name}さん\n`
     + `📦 ${d.product} ${d.productName || d.product}${colorText}\n`
     + `✅ OK: ${kenpinState.quantityOk}${unitText}\n`
     + `⚠️ B品: ${kenpinState.quantityBGrade}${unitText}\n`
-    + `❌ 不可: ${kenpinState.quantityRejected}${unitText}`;
+    + `❌ 不可: ${kenpinState.quantityRejected}${unitText}`
+    + causeDetail;
   if (!confirm(msg)) return;
 
   const record = {
@@ -3230,6 +3347,10 @@ function submitKenpin() {
     quantityOk: kenpinState.quantityOk,
     quantityBGrade: kenpinState.quantityBGrade,
     quantityRejected: kenpinState.quantityRejected,
+    bgradeSewing: kenpinState.bgradeSewing,
+    bgradeFabric: kenpinState.bgradeFabric,
+    rejectedSewing: kenpinState.rejectedSewing,
+    rejectedFabric: kenpinState.rejectedFabric,
     quantityTotal: d.quantity
   };
   state.records.push(record);
