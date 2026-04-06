@@ -388,6 +388,12 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <div class="form-section">
       <h3>パーツを確認してください</h3>
       <ul class="parts-list" id="parts-list"></ul>
+      <div id="parts-confirm" style="display:none; margin-top:12px; padding:14px; background:#f5f5f7; border-radius:12px;">
+        <label style="display:flex; align-items:center; gap:12px; cursor:pointer; font-size:15px; font-weight:600;">
+          <div class="check-box" id="parts-confirm-check" onclick="togglePartsConfirm(this)"></div>
+          すべて持ち出しOK
+        </label>
+      </div>
     </div>
 
     <button class="submit-btn not-ready" id="submit-btn" onclick="submitForm()">
@@ -1965,6 +1971,9 @@ const PRODUCTS = [
   { code: 'LB', name: 'レッスンバッグ', sizes: ['LBL', 'LBM', 'LBS', 'LBSS'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/6f164ee6e5603969ce42dacb198813a6.jpg',
     colors: ['RD レッド', 'MU マスタード', 'BE ベージュ', 'BR カーキブラウン', 'BL ブルー', 'NA ネイビー', 'SB サンドベージュ', 'GY チャコールグレー', 'BK ブラック'],
     parts: ['表地 ×1', '裏地 ×1', 'ポケット ×1', 'お名前タグ ×1', '持ち手ベルト ×2', 'KITOKITOタグ ×1'] },
+  { code: 'LB_NAME', name: 'レッスンバッグ（名入れ）', sizes: ['LBL_NAME', 'LBM_NAME', 'LBS_NAME', 'LBSS_NAME'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/6f164ee6e5603969ce42dacb198813a6.jpg',
+    colors: ['RD レッド', 'MU マスタード', 'BE ベージュ', 'BR カーキブラウン', 'BL ブルー', 'NA ネイビー', 'SB サンドベージュ', 'GY チャコールグレー', 'BK ブラック'],
+    parts: ['表地 ×1', '裏地 ×1', 'ポケット ×1', 'お名前タグ ×1', '持ち手ベルト ×2', 'ブランクタグ ×1'] },
   { code: 'SB', name: 'シューズバッグ', sizes: ['SBL', 'SBM'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/d64f4c82a427f1719c5d5a08b51c8665.jpg',
     colors: ['BK ブラック', 'BL ブルー', 'BE ベージュ', 'PK ピンク', 'GY グレー', 'LA ラベンダー'],
     parts: ['表地 ×1', '裏地 ×1', '接着芯 ×2', 'お名前タグ ×1', 'ループエンド ×2', 'テープ ×1', 'ひも ×2'] },
@@ -2021,6 +2030,7 @@ let state = {
   selectedColor: '',
   quantity: 5,
   checkedParts: new Set(),
+  partsConfirmed: false,
   records: []
 };
 
@@ -2133,6 +2143,7 @@ const SIZE_LABELS = {
   'TAL': 'L（ラージ）', 'TAM': 'M（ミディアム）',
   'FBM': 'M（ミディアム）', 'FBOL': 'OL（おおきめ）',
   'IBL': 'L（ラージ）', 'IBM': 'M（ミディアム）', 'IBSS': 'SS（ミニ）',
+  'LBL_NAME': 'L（ラージ）', 'LBM_NAME': 'M（ミディアム）', 'LBS_NAME': 'S（スモール）', 'LBSS_NAME': 'SS（ミニ）',
 };
 
 function selectProduct(product) {
@@ -2172,6 +2183,7 @@ function openInputScreen(product) {
   state.selectedColor = product.isParts ? 'なし' : '';
   state.quantity = 5;
   state.checkedParts = new Set();
+  state.partsConfirmed = false;
 
   document.getElementById('selected-product-name').textContent = `${product.code} ${product.name}`;
   document.getElementById('qty-input').value = state.quantity;
@@ -2196,14 +2208,21 @@ function openInputScreen(product) {
     });
   }
 
-  // パーツリスト
+  // パーツリスト（確認用リスト表示）
   const partsList = document.getElementById('parts-list');
   partsList.innerHTML = '';
-  product.parts.forEach((part, i) => {
+  product.parts.forEach((part) => {
     const li = document.createElement('li');
-    li.innerHTML = `<div class="check-box" onclick="togglePart(this, ${i})"></div><span>${part}</span>`;
+    li.innerHTML = `<span style="color:#34c759; font-size:16px;">✓</span><span>${part}</span>`;
     partsList.appendChild(li);
   });
+
+  // 最終確認チェックボックスをリセット
+  state.partsConfirmed = false;
+  const confirmArea = document.getElementById('parts-confirm');
+  const confirmCheck = document.getElementById('parts-confirm-check');
+  if (confirmArea) confirmArea.style.display = 'block';
+  if (confirmCheck) confirmCheck.classList.remove('checked');
 
   updateSubmitBtn();
   showScreen('screen-input');
@@ -2237,25 +2256,23 @@ function syncQtyFromInput(type) {
   }
 }
 
-function togglePart(el, idx) {
-  if (state.checkedParts.has(idx)) {
-    state.checkedParts.delete(idx);
-    el.classList.remove('checked');
-  } else {
-    state.checkedParts.add(idx);
+function togglePartsConfirm(el) {
+  state.partsConfirmed = !state.partsConfirmed;
+  if (state.partsConfirmed) {
     el.classList.add('checked');
+  } else {
+    el.classList.remove('checked');
   }
   updateSubmitBtn();
 }
 
 function updateSubmitBtn() {
   const btn = document.getElementById('submit-btn');
-  const allChecked = state.selectedProduct && state.checkedParts.size === state.selectedProduct.parts.length;
   if (!state.selectedColor) {
     btn.textContent = 'カラーを選んでください';
     btn.className = 'submit-btn not-ready';
-  } else if (!allChecked) {
-    btn.textContent = 'パーツを全て確認してください';
+  } else if (!state.partsConfirmed) {
+    btn.textContent = 'パーツを確認してチェックしてください';
     btn.className = 'submit-btn not-ready';
   } else {
     const colorText = state.selectedProduct.isParts ? '' : ` ${state.selectedColor}`;
@@ -2266,7 +2283,7 @@ function updateSubmitBtn() {
 
 function submitForm() {
   if (!state.selectedColor || !state.selectedProduct) return;
-  if (state.checkedParts.size !== state.selectedProduct.parts.length) return;
+  if (!state.partsConfirmed) return;
 
   const record = {
     date: new Date().toISOString(),
