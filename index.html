@@ -810,6 +810,11 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <div class="color-grid" id="print-product-buttons"></div>
     </div>
 
+    <div class="form-section" id="print-size-section" style="display:none;">
+      <h3>サイズを選んでください</h3>
+      <div class="color-grid" id="print-size-buttons"></div>
+    </div>
+
     <div class="form-section">
       <h3>カラーを選んでください</h3>
       <div class="color-grid" id="print-color-buttons"></div>
@@ -2572,7 +2577,9 @@ function startWork(type) {
       btn.onclick = () => selectWorkProduct(type, p, btn);
       grid.appendChild(btn);
     });
-    // カラーボタンクリア
+    // サイズ・カラーボタンクリア
+    const sizeSection = document.getElementById(`${type}-size-section`);
+    if (sizeSection) sizeSection.style.display = 'none';
     const colorGrid = document.getElementById(`${type}-color-buttons`);
     if (colorGrid) colorGrid.innerHTML = '';
     // 数量リセット
@@ -2734,11 +2741,45 @@ function showSaidanPartsList(sku, colorCode, categoryCode) {
 
 // プリント・入庫用：商品選択
 function selectWorkProduct(type, product, btn) {
+  document.querySelectorAll(`#${type}-product-buttons .color-btn`).forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+
+  // サイズ展開がある商品はサイズ選択を表示
+  const sizeSection = document.getElementById(`${type}-size-section`);
+  if (product.sizes && product.sizes.length > 0 && sizeSection) {
+    sizeSection.style.display = '';
+    const sizeGrid = document.getElementById(`${type}-size-buttons`);
+    sizeGrid.innerHTML = '';
+    product.sizes.forEach(sizeCode => {
+      const sbtn = document.createElement('button');
+      sbtn.className = 'color-btn';
+      sbtn.textContent = SIZE_LABELS[sizeCode] || SAIDAN_SIZE_LABELS[sizeCode] || sizeCode;
+      sbtn.onclick = () => {
+        document.querySelectorAll(`#${type}-size-buttons .color-btn`).forEach(b => b.classList.remove('selected'));
+        sbtn.classList.add('selected');
+        const sizedProduct = { ...product, code: sizeCode, name: product.name + '（' + (SIZE_LABELS[sizeCode] || SAIDAN_SIZE_LABELS[sizeCode] || sizeCode) + '）', originalCode: product.code };
+        selectWorkProductColors(type, sizedProduct);
+      };
+      sizeGrid.appendChild(sbtn);
+    });
+    // カラーをリセット
+    workState[type].product = null;
+    workState[type].color = '';
+    const colorGrid = document.getElementById(`${type}-color-buttons`);
+    if (colorGrid) colorGrid.innerHTML = '';
+    updateWorkBtn(type);
+    return;
+  }
+
+  // サイズなし：直接カラー選択へ
+  if (sizeSection) sizeSection.style.display = 'none';
+  selectWorkProductColors(type, product);
+}
+
+function selectWorkProductColors(type, product) {
   workState[type].product = product;
   workState[type].color = '';
   workState[type].part = '';
-  document.querySelectorAll(`#${type}-product-buttons .color-btn`).forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
 
   // カラーボタン生成
   const colorGrid = document.getElementById(`${type}-color-buttons`);
