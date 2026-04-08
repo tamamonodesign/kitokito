@@ -446,7 +446,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
     <!-- Tab 1: 全体管理 -->
     <div class="dash-tab-content active" id="dash-tab-zentai">
-      <div class="table-scroll-wrapper">
+      <div class="table-scroll-wrapper" style="max-height:70vh; overflow-y:auto;">
         <table class="zentai-table" id="zentai-table" style="min-width:auto; width:100%;">
           <thead></thead>
           <tbody></tbody>
@@ -4669,9 +4669,9 @@ function refreshZentaiTable() {
   let thead = '<tr>';
   thead += '<th style="text-align:left; padding:4px 6px;">SKU</th>';
   thead += '<th style="width:60px; padding:4px;">進捗</th>';
-  thead += '<th style="width:28px; padding:4px; font-size:10px;">縫製</th>';
-  thead += '<th style="width:28px; padding:4px; font-size:10px;">入待</th>';
-  thead += '<th style="width:28px; padding:4px; font-size:10px;">入庫</th>';
+  thead += '<th style="width:28px; padding:4px; font-size:10px;">内職</th>';
+  thead += '<th style="width:28px; padding:4px; font-size:10px;">父</th>';
+  thead += '<th style="width:28px; padding:4px; font-size:10px;">山田</th>';
   thead += '<th style="width:28px; padding:4px; font-size:10px;">販売</th>';
   thead += '<th style="width:32px; padding:4px; font-size:10px;">在庫</th>';
   thead += '<th style="width:22px; padding:4px; font-size:10px;">B</th>';
@@ -4684,6 +4684,7 @@ function refreshZentaiTable() {
   allSKUs.forEach(s => {
     const a = agg[s.sku];
     const sewing = Math.max(0, a.mochidashi - a.nouhin);
+    const waitKenpin = Math.max(0, a.nouhin - (a.kenpinOk + a.kenpinB + a.kenpinRejected));
     const waitNyuko = Math.max(0, (a.kenpinOk + a.kenpinB) - a.nyukoQty - a.nyukoB);
     const bGrade = a.kenpinB + a.nyukoB;
     const rejected = a.kenpinRejected;
@@ -4730,8 +4731,8 @@ function refreshZentaiTable() {
     tbody += '<td style="text-align:left; padding:4px 6px;"><div style="font-weight:600; font-size:12px;">' + s.sku + '</div><div style="font-size:10px; color:#86868b;">' + s.colorName + '</div></td>';
     tbody += '<td style="padding:4px;">' + progressHtml + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (sewing || '-') + '</td>';
+    tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (waitKenpin || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (waitNyuko || '-') + '</td>';
-    tbody += '<td class="num" style="padding:4px; font-size:12px; font-weight:600;">' + (nyukoTotal || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (hanbai || '-') + '</td>';
     const stock = a.tanaoroshi + nyukoTotal - hanbai;
     const hasStockData = a.tanaoroshi || nyukoTotal || hanbai;
