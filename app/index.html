@@ -548,9 +548,6 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
     <div class="section-title">📦 最近の入庫</div>
     <div id="mom-recent-stock"></div>
-
-    <div class="section-title">📋 全体の在庫状況</div>
-    <div id="mom-stock-overview"></div>
   </div>
 
   <!-- ========== 検品ダッシュボード ========== -->
@@ -3734,28 +3731,6 @@ function refreshMomDash() {
     }
   }
 
-  // 在庫概要
-  const el3 = document.getElementById('mom-stock-overview');
-  if (el3) {
-    if (nyuko.length === 0) {
-      el3.innerHTML = '<div class="no-data">入庫記録が蓄積されると在庫状況が表示されます</div>';
-    } else {
-      const stock = {};
-      nyuko.forEach(r => {
-        const key = r.product;
-        if (!stock[key]) stock[key] = { product: r.product, productName: r.productName || '', total: 0 };
-        stock[key].total += (r.quantity || 0);
-      });
-      const keys = Object.keys(stock).sort();
-      el3.innerHTML = '<div class="alert-card">' + keys.map(k => {
-        const s = stock[k];
-        const name = SKU_NAMES[s.product] || s.productName || s.product;
-        return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0">
-          <span>${s.product}</span><span style="font-weight:600">${s.total}個</span>
-        </div>`;
-      }).join('') + '</div>';
-    }
-  }
 }
 
 // --- 山田さんダッシュボード ---
