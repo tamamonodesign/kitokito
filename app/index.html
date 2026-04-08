@@ -441,6 +441,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <button class="dash-tab" onclick="switchDashTab('tanaoroshi-sheet')">棚卸シート</button>
       <button class="dash-tab" onclick="switchDashTab('hanbai')">販売数</button>
       <button class="dash-tab" onclick="switchDashTab('parts-stock')">パーツ在庫</button>
+      <button class="dash-tab" onclick="switchDashTab('fabric-stock')">生地在庫</button>
       <button class="dash-tab" onclick="switchDashTab('production-target')">生産目標</button>
     </div>
 
@@ -517,6 +518,22 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       </div>
       <div class="table-scroll-wrapper">
         <table class="zentai-table" id="parts-stock-table" style="min-width:auto; width:100%;">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab: 生地在庫 -->
+    <div class="dash-tab-content" id="dash-tab-fabric-stock">
+      <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <label style="font-size:13px; color:#1d1d1f;">棚卸し日:</label>
+        <input type="date" id="fabric-stock-bulk-date" style="padding:8px 10px; font-size:13px; border:1px solid #d2d2d7; border-radius:8px;">
+        <button class="submit-btn ready" onclick="markAllFabricStockDate()" style="padding:10px 14px; font-size:13px;">全部この日に更新</button>
+        <span style="font-size:11px; color:#86868b;">数字をタップすると個別に編集できます</span>
+      </div>
+      <div class="table-scroll-wrapper" style="max-height:70vh; overflow-y:auto;">
+        <table class="zentai-table" id="fabric-stock-table" style="min-width:auto; width:100%;">
           <thead></thead>
           <tbody></tbody>
         </table>
@@ -4457,6 +4474,7 @@ function switchDashTab(tabId) {
         (tabId === 'tanaoroshi-sheet' && t.textContent === '棚卸シート') ||
         (tabId === 'hanbai' && t.textContent === '販売数') ||
         (tabId === 'parts-stock' && t.textContent === 'パーツ在庫') ||
+        (tabId === 'fabric-stock' && t.textContent === '生地在庫') ||
         (tabId === 'production-target' && t.textContent === '生産目標')) {
       t.classList.add('active');
     }
@@ -4466,6 +4484,7 @@ function switchDashTab(tabId) {
   if (tabId === 'tanaoroshi-sheet') refreshTanaoroshiSheet();
   if (tabId === 'hanbai') refreshHanbaiSheet();
   if (tabId === 'parts-stock') refreshPartsStock();
+  if (tabId === 'fabric-stock') refreshFabricStockTable();
   if (tabId === 'production-target') refreshProductionTarget();
 }
 
@@ -4594,6 +4613,190 @@ function showMaterialDetail(sku, partsJson) {
 function closeMaterialDetail() {
   const overlay = document.getElementById('material-detail-overlay');
   if (overlay) overlay.style.display = 'none';
+}
+
+// ===== 生地在庫 =====
+const FABRIC_STOCK_INITIAL = [
+  { id: 'fab_001', usage: 'LB/表',         code: 'SO-709Z',  colorCode: 'RD', colorName: '11 レッド',         tan: 0,    cut: 1.5 },
+  { id: 'fab_002', usage: 'LB/表',         code: 'SO-709Z',  colorCode: 'MU', colorName: '9 マスタード',       tan: null, cut: 2 },
+  { id: 'fab_003', usage: 'LB/表',         code: 'SO-709Z',  colorCode: 'BE', colorName: '2 キャメルベージュ', tan: null, cut: null },
+  { id: 'fab_004', usage: 'LB/表',         code: 'SO-709Z',  colorCode: 'BR', colorName: '3 ブラウン',         tan: null, cut: null },
+  { id: 'fab_005', usage: 'LB/表',         code: 'SO-709Z',  colorCode: 'BL', colorName: '6 ブルー',           tan: null, cut: null },
+  { id: 'fab_006', usage: 'LB/表',         code: 'SO-709Z',  colorCode: 'NA', colorName: '7 ダークネイビー',   tan: null, cut: 2 },
+  { id: 'fab_007', usage: 'LB/ポケット',   code: 'SO-709Z',  colorCode: 'P',  colorName: '8 ブラック',         tan: null, cut: null },
+  { id: 'fab_008', usage: 'LB/裏',         code: 'SO-769',   colorCode: '',   colorName: '7 ブラック',         tan: 1,    cut: null },
+  { id: 'fab_009', usage: 'IB/表',         code: 'SW-11264', colorCode: '',   colorName: '53 生成り（カス有）', tan: 0.5,  cut: null },
+  { id: 'fab_010', usage: 'SBD/表',        code: '11号帆布', colorCode: 'BK', colorName: '65 ブラック',         tan: 0.5,  cut: null },
+  { id: 'fab_011', usage: 'SBD/表',        code: '11号帆布', colorCode: 'BL', colorName: '96 アースブルー',     tan: 1,    cut: null },
+  { id: 'fab_012', usage: 'SBD/表',        code: '11号帆布', colorCode: 'BR', colorName: '87 モカ',             tan: 0.8,  cut: null },
+  { id: 'fab_013', usage: 'SBD/表',        code: '11号帆布', colorCode: 'KH', colorName: '88 カーキ',           tan: 0.8,  cut: null },
+  { id: 'fab_014', usage: 'SBD/表',        code: '11号帆布', colorCode: 'OR', colorName: '97 サーモンオレンジ', tan: 1,    cut: null },
+  { id: 'fab_015', usage: 'SBD/表',        code: '11号帆布', colorCode: 'SP', colorName: '101 スモークピンク',  tan: null, cut: 1 },
+  { id: 'fab_016', usage: 'SB,TA/表',      code: 'SO-80300', colorCode: 'BK', colorName: 'D18 ブラック',        tan: 0.25, cut: null },
+  { id: 'fab_017', usage: 'SB,TA/表',      code: 'SO-80300', colorCode: 'BL', colorName: 'M10 エーゲブルー',    tan: 0.25, cut: null },
+  { id: 'fab_018', usage: 'SB,TA/表',      code: 'SO-80300', colorCode: 'BE', colorName: 'L4 ベージュ',         tan: 1,    cut: null },
+  { id: 'fab_019', usage: 'SB,TA/表',      code: 'SW-77300', colorCode: 'PK', colorName: '34T(PK)',             tan: null, cut: 1 },
+  { id: 'fab_020', usage: 'SB,TA/表',      code: 'SW-77300', colorCode: 'GY', colorName: '26T(GY)',             tan: 1.25, cut: null },
+  { id: 'fab_021', usage: 'SB,TA/表',      code: 'SW-77300', colorCode: 'LA', colorName: '73T(LA)',             tan: 1,    cut: null },
+  { id: 'fab_022', usage: 'SNAP/表',       code: 'SW-41033', colorCode: 'KH', colorName: '4(KA)',               tan: null, cut: null },
+  { id: 'fab_023', usage: 'SNAP/表',       code: 'SW-41033', colorCode: 'NA', colorName: '19(NA)',              tan: 1,    cut: null },
+  { id: 'fab_024', usage: 'PNAP/表',       code: 'SO-701',   colorCode: 'BL', colorName: '53 サックスブルー',   tan: null, cut: 2 },
+  { id: 'fab_025', usage: 'PNAP/表',       code: 'SO-701',   colorCode: 'BE', colorName: '46 サンドベージュ',   tan: 1,    cut: null },
+  { id: 'fab_026', usage: 'PNAP/表',       code: 'SO-701',   colorCode: 'OR', colorName: '52 サーモンピンク',   tan: null, cut: null },
+  { id: 'fab_027', usage: 'PNAP/表',       code: 'SO-701',   colorCode: 'PK', colorName: '51 ピンク',           tan: null, cut: null },
+  { id: 'fab_028', usage: 'APM',           code: '',         colorCode: 'ST', colorName: '',                    tan: null, cut: 0.5 },
+  { id: 'fab_029', usage: 'APS/DO/HA/CUP', code: 'SO-80200', colorCode: 'GY', colorName: 'L9 グレー',           tan: 0.25, cut: null },
+  { id: 'fab_030', usage: 'APS/DO/HA/CUP', code: 'SO-80200', colorCode: 'BE', colorName: 'L4 ベージュ',         tan: 0.5,  cut: null },
+  { id: 'fab_031', usage: 'APS/DO/HA/CUP', code: 'SO-80200', colorCode: 'BK', colorName: 'D19 ブラック',        tan: 1,    cut: null },
+  { id: 'fab_032', usage: 'APS/DO/HA/CUP', code: 'SO-80200', colorCode: 'WH', colorName: 'W1 オフホワイト',     tan: 0,    cut: null },
+  { id: 'fab_033', usage: '撥水裏地',      code: 'SO-713Z',  colorCode: '',   colorName: '30 ブラック',         tan: 0.5,  cut: null },
+  { id: 'fab_034', usage: 'KM',            code: '',         colorCode: 'BST',    colorName: '',                tan: 0.3,  cut: null },
+  { id: 'fab_035', usage: 'KM',            code: '',         colorCode: 'RST',    colorName: '',                tan: 0.3,  cut: null },
+  { id: 'fab_036', usage: 'KM',            code: '',         colorCode: 'DOT',    colorName: '',                tan: 0.3,  cut: null },
+  { id: 'fab_037', usage: 'KM',            code: '',         colorCode: 'FL_W',   colorName: '',                tan: 1,    cut: null },
+  { id: 'fab_038', usage: 'KM',            code: '',         colorCode: 'FL_B',   colorName: '',                tan: 1,    cut: null },
+  { id: 'fab_039', usage: 'KM',            code: '',         colorCode: 'ネコ',   colorName: '',                tan: 0.8,  cut: null },
+  { id: 'fab_040', usage: 'KM',            code: '',         colorCode: 'ルアー', colorName: '',                tan: 0.7,  cut: null },
+  { id: 'fab_041', usage: 'KM',            code: '',         colorCode: 'BST(2)', colorName: '',                tan: 0.5,  cut: null },
+  { id: 'fab_042', usage: 'KM',            code: '',         colorCode: 'RST(2)', colorName: '',                tan: 0.5,  cut: null },
+  { id: 'fab_043', usage: 'KM',            code: '',         colorCode: 'SST',    colorName: '',                tan: 0.5,  cut: null },
+  { id: 'fab_044', usage: 'KM',            code: '',         colorCode: 'GCHE',   colorName: '',                tan: null, cut: null },
+  { id: 'fab_045', usage: 'KM',            code: '',         colorCode: 'DOT(2)', colorName: '',                tan: 0.5,  cut: null },
+  { id: 'fab_046', usage: 'KM',            code: '',         colorCode: 'カブトW', colorName: '',               tan: 0.5,  cut: null },
+  { id: 'fab_047', usage: 'KM',            code: '',         colorCode: 'カブトB', colorName: '',               tan: 0.5,  cut: null },
+  { id: 'fab_048', usage: 'MASK',          code: '',         colorCode: '',       colorName: '',                tan: null, cut: null },
+];
+
+function loadFabricStock() {
+  try {
+    const raw = localStorage.getItem('kitokito_fabric_stock');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch(e) {}
+  // 初期データのコピーを返す
+  return FABRIC_STOCK_INITIAL.map(x => Object.assign({}, x, { updatedAt: '' }));
+}
+
+function saveFabricStock(items) {
+  localStorage.setItem('kitokito_fabric_stock', JSON.stringify(items));
+}
+
+function fmtFabricDate(s) {
+  if (!s) return '―';
+  // YYYY-MM-DD → M/D
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return parseInt(m[2]) + '/' + parseInt(m[3]);
+  return s;
+}
+
+function todayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return yyyy + '-' + mm + '-' + dd;
+}
+
+function refreshFabricStockTable() {
+  const table = document.getElementById('fabric-stock-table');
+  if (!table) return;
+  const items = loadFabricStock();
+
+  let thead = '<tr>';
+  thead += '<th style="text-align:left; padding:6px 8px; font-size:11px;">用途</th>';
+  thead += '<th style="text-align:left; padding:6px 8px; font-size:11px;">生地</th>';
+  thead += '<th style="text-align:left; padding:6px 8px; font-size:11px;">色</th>';
+  thead += '<th style="width:60px; padding:6px; font-size:11px;">反</th>';
+  thead += '<th style="width:70px; padding:6px; font-size:11px;">カット(m)</th>';
+  thead += '<th style="width:60px; padding:6px; font-size:11px;">更新</th>';
+  thead += '</tr>';
+
+  // usage で rowspan するため連続グループ化
+  let tbody = '';
+  let prevUsage = null;
+  let groupCount = 0;
+  // まず usage ごとの連続件数を計算
+  const groupSizes = [];
+  items.forEach((it, i) => {
+    if (i === 0 || items[i-1].usage !== it.usage) {
+      groupSizes.push({ start: i, size: 1 });
+    } else {
+      groupSizes[groupSizes.length - 1].size += 1;
+    }
+  });
+  const startToSize = {};
+  groupSizes.forEach(g => { startToSize[g.start] = g.size; });
+
+  items.forEach((it, i) => {
+    const isFirstOfGroup = (i === 0 || items[i-1].usage !== it.usage);
+    tbody += '<tr>';
+    if (isFirstOfGroup) {
+      tbody += '<td rowspan="' + startToSize[i] + '" style="text-align:left; padding:6px 8px; font-size:11px; font-weight:600; vertical-align:top; background:#fafafa;">' + (it.usage || '―') + '</td>';
+    }
+    tbody += '<td style="text-align:left; padding:6px 8px; font-size:11px; color:#86868b;">' + (it.code || '―') + '</td>';
+    const colorLabel = (it.colorCode || '') + (it.colorName ? ' ' + it.colorName : '');
+    tbody += '<td style="text-align:left; padding:6px 8px; font-size:11px;">' + (colorLabel.trim() || '―') + '</td>';
+
+    const tanDisp = (it.tan === null || it.tan === undefined || it.tan === '') ? '―' : it.tan;
+    const cutDisp = (it.cut === null || it.cut === undefined || it.cut === '') ? '―' : it.cut;
+    const tanColor = (typeof it.tan === 'number' && it.tan === 0) ? 'color:#ff3b30; font-weight:700;' : (typeof it.tan === 'number' && it.tan <= 0.3) ? 'color:#ff9500; font-weight:600;' : '';
+    tbody += '<td class="num" style="padding:6px; font-size:13px; cursor:pointer; ' + tanColor + '" onclick="editFabricStockCell(this, \'' + it.id + '\', \'tan\')">' + tanDisp + '</td>';
+    tbody += '<td class="num" style="padding:6px; font-size:13px; cursor:pointer;" onclick="editFabricStockCell(this, \'' + it.id + '\', \'cut\')">' + cutDisp + '</td>';
+    tbody += '<td class="num" style="padding:6px; font-size:11px; color:#86868b;">' + fmtFabricDate(it.updatedAt) + '</td>';
+    tbody += '</tr>';
+  });
+
+  table.querySelector('thead').innerHTML = thead;
+  table.querySelector('tbody').innerHTML = tbody;
+}
+
+function editFabricStockCell(td, id, field) {
+  if (td.querySelector('input')) return;
+  const items = loadFabricStock();
+  const item = items.find(x => x.id === id);
+  if (!item) return;
+  const current = item[field];
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = '0.05';
+  input.min = 0;
+  input.value = (current === null || current === undefined) ? '' : current;
+  input.style.width = '52px';
+  input.style.fontSize = '13px';
+  input.style.textAlign = 'right';
+  td.textContent = '';
+  td.appendChild(input);
+  input.focus();
+  input.select();
+
+  function save() {
+    const v = input.value.trim();
+    const items2 = loadFabricStock();
+    const it2 = items2.find(x => x.id === id);
+    if (!it2) { refreshFabricStockTable(); return; }
+    it2[field] = (v === '') ? null : parseFloat(v);
+    it2.updatedAt = todayISO();
+    saveFabricStock(items2);
+    refreshFabricStockTable();
+  }
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { refreshFabricStockTable(); }
+  });
+}
+
+function markAllFabricStockDate() {
+  const input = document.getElementById('fabric-stock-bulk-date');
+  const date = input && input.value ? input.value : '';
+  if (!date) { alert('日付を選択してください'); return; }
+  if (!confirm('全ての生地の更新日を ' + date + ' に変更しますか？\n（在庫数値は変更されません）')) return;
+  const items = loadFabricStock();
+  items.forEach(it => { it.updatedAt = date; });
+  saveFabricStock(items);
+  refreshFabricStockTable();
 }
 
 function refreshZentaiTable() {
