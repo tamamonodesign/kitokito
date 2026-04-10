@@ -447,6 +447,9 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
     <!-- Tab 1: 全体管理 -->
     <div class="dash-tab-content active" id="dash-tab-zentai">
+      <div style="text-align:right; margin-bottom:8px;">
+        <button onclick="exportZentaiCSV()" style="background:#007aff; color:white; border:none; border-radius:8px; padding:8px 16px; font-size:13px; cursor:pointer;">CSV出力</button>
+      </div>
       <div class="table-scroll-wrapper" style="max-height:70vh; overflow-y:auto;">
         <table class="zentai-table" id="zentai-table" style="min-width:auto; width:100%;">
           <thead></thead>
@@ -4086,6 +4089,90 @@ function exportData() {
   const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
   a.href = url;
   a.download = `kitokito_backup_${dateStr}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportZentaiCSV() {
+  const allSKUs = generateAllSKUs();
+  const records = state.records;
+
+  const agg = {};
+  allSKUs.forEach(s => { agg[s.sku] = { tanaoroshi: 0, mochidashi: 0, nouhin: 0, kenpinOk: 0, kenpinB: 0, kenpinRejected: 0, nyukoQty: 0, nyukoB: 0 }; });
+
+  const tanaLatest = {};
+  records.filter(r => r.type === '棚卸し').forEach(r => {
+    const colorCode = (r.color || '').split(' ')[0];
+    const key = r.product + '_' + colorCode;
+    if (!agg[key]) return;
+    if (!tanaLatest[key] || r.date > tanaLatest[key].date) {
+      tanaLatest[key] = { quantity: r.quantity || 0, date: r.date };
+    }
+  });
+  Object.entries(tanaLatest).forEach(([key, data]) => {
+    if (agg[key]) { agg[key].tanaoroshi = data.quantity; agg[key].tanaDate = data.date; }
+  });
+
+  records.forEach(r => {
+    const colorCode = (r.color || '').split(' ')[0];
+    const key = r.product + '_' + colorCode;
+    if (!agg[key]) return;
+    if (r.type === '持ち出し') agg[key].mochidashi += (r.quantity || 0);
+    if (r.type === '納品') agg[key].nouhin += (r.quantityOk || r.quantity || 0);
+    if (r.type === '検品完了') {
+      agg[key].kenpinOk += (r.quantityOk || r.quantity || 0);
+      agg[key].kenpinB += (r.bGrade || 0);
+      agg[key].kenpinRejected += (r.rejected || 0);
+    }
+    if (r.type === '入庫') {
+      const tanaDate = agg[key].tanaDate;
+      if (!tanaDate || r.date > tanaDate) agg[key].nyukoQty += (r.quantity || 0);
+      agg[key].nyukoB += (r.bGrade || 0);
+    }
+  });
+
+  const hanbaiData = calcHanbaiData();
+  const targetMap = {};
+  if (typeof PRODUCTION_TARGET_DATA !== 'undefined') {
+    PRODUCTION_TARGET_DATA.forEach(d => { targetMap[d.pg] = d.target || 0; });
+  }
+
+  const rows = [['SKU','商品名','カラー','生産目標','棚卸し','入庫','販売','現在庫','内職中','検品待ち','入庫待ち','B品','不良']];
+
+  allSKUs.forEach(s => {
+    const a = agg[s.sku];
+    const target = targetMap[s.sku] || 0;
+    const nyukoTotal = a.nyukoQty;
+    const sewing = Math.max(0, a.mochidashi - a.nouhin);
+    const waitKenpin = Math.max(0, a.nouhin - (a.kenpinOk + a.kenpinB + a.kenpinRejected));
+    const waitNyuko = Math.max(0, (a.kenpinOk + a.kenpinB) - a.nyukoQty - a.nyukoB);
+    const bGrade = a.kenpinB + a.nyukoB;
+    const rejected = a.kenpinRejected;
+    const tanaDate = a.tanaDate || '';
+    let csvSales = 0;
+    records.filter(r => r.type === '販売').forEach(r => {
+      const rSku = r.product + '_' + (r.color || '').split(' ')[0];
+      if (rSku !== s.sku) return;
+      const salesDate = r.periodTo || r.date || '';
+      if (!tanaDate || salesDate > tanaDate) csvSales += (r.quantity || 0);
+    });
+    const hanbai = (hanbaiData.totals[s.sku] || 0) + csvSales;
+    const stock = a.tanaoroshi + nyukoTotal - hanbai;
+    const hasData = target || a.mochidashi || a.nouhin || a.kenpinOk || a.kenpinB || a.kenpinRejected || a.nyukoQty || hanbai;
+    if (!hasData) return;
+
+    rows.push([s.sku, s.colorName || '', s.colorCode || '', target, a.tanaoroshi, nyukoTotal, hanbai, stock, sewing, waitKenpin, waitNyuko, bGrade, rejected]);
+  });
+
+  const bom = '\uFEFF';
+  const csv = bom + rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  const dateStr = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
+  a.href = url;
+  a.download = 'kitokito_zentai_' + dateStr + '.csv';
   a.click();
   URL.revokeObjectURL(url);
 }
