@@ -489,7 +489,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <div style="margin-bottom:16px;">
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <label style="display:inline-flex; align-items:center; gap:6px; padding:10px 16px; background:#0071e3; color:white; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">
-            📂 ごくーCSV取込
+            📂 販売CSV取込
             <input type="file" accept=".csv" id="csv-file-input" onchange="handleCSVImport(this)" style="display:none;">
           </label>
           <span id="csv-import-status" style="font-size:13px; color:#86868b;"></span>
@@ -1959,6 +1959,10 @@ const MATERIAL_CATEGORIES = [
     ]
   },
   {
+    name: '糸',
+    items: []
+  },
+  {
     name: 'その他',
     items: [
       'Dカン 20mm（dkan_20）',
@@ -1992,6 +1996,7 @@ const MATERIAL_CATEGORIES = [
 const MATERIAL_UNITS = {
   '生地': 'm',
   'パーツ': '巻/袋',
+  '糸': '本',
   'その他': '個/袋'
 };
 
@@ -2159,9 +2164,7 @@ async function syncFromGAS() {
       delete clean._rowNum;
       return clean;
     });
-    // ローカルのみのレコード（販売CSV等）を保持してマージ
-    const localOnlyRecords = state.records.filter(r => r.type === '販売');
-    state.records = [...gasRecords, ...localOnlyRecords];
+    state.records = gasRecords;
     localStorage.setItem('kitokito_records', JSON.stringify(state.records));
     showSyncStatus('synced');
     // 現在表示中のダッシュボードを更新
@@ -2939,6 +2942,28 @@ function selectOrderCategory(category, btn) {
   const list = document.getElementById('order-material-list');
   section.style.display = '';
   list.innerHTML = '';
+
+  // 糸カテゴリでアイテム未登録の場合は手入力モード
+  if (category.name === '糸' && category.items.length === 0) {
+    const inputWrap = document.createElement('div');
+    inputWrap.style.cssText = 'padding:8px 0;';
+    inputWrap.innerHTML = `
+      <label style="font-weight:bold;font-size:0.95em;">色番号</label>
+      <input type="text" id="thread-color-input" placeholder="例: #60 ベージュ"
+        style="width:100%;padding:10px;font-size:1.05em;border:1.5px solid #ccc;border-radius:8px;margin:6px 0 10px;"
+        oninput="onThreadInput()">
+      <label style="font-weight:bold;font-size:0.95em;">用途SKU（任意）</label>
+      <input type="text" id="thread-sku-input" placeholder="例: LBL, APM"
+        style="width:100%;padding:10px;font-size:1.05em;border:1.5px solid #ccc;border-radius:8px;margin:6px 0;">
+    `;
+    list.appendChild(inputWrap);
+    document.getElementById('order-qty-section').style.display = '';
+    const unit = MATERIAL_UNITS[category.name] || '';
+    document.getElementById('order-qty-unit').textContent = `単位: ${unit}`;
+    updateMaterialBtn('order');
+    return;
+  }
+
   const sorted = [...category.items].sort((a, b) => a.localeCompare(b, 'ja'));
   sorted.forEach(m => {
     const item = document.createElement('div');
@@ -2957,6 +2982,17 @@ function selectOrderCategory(category, btn) {
     list.appendChild(item);
   });
   document.getElementById('order-qty-section').style.display = 'none';
+  updateMaterialBtn('order');
+}
+
+function onThreadInput() {
+  const color = (document.getElementById('thread-color-input').value || '').trim();
+  const sku = (document.getElementById('thread-sku-input').value || '').trim();
+  if (color) {
+    materialState.order.selected = '糸 ' + color + (sku ? '｜' + sku : '');
+  } else {
+    materialState.order.selected = '';
+  }
   updateMaterialBtn('order');
 }
 
@@ -5315,12 +5351,42 @@ async function handleCSVImport(fileInput) {
     const rows = parseCSV(text);
     if (rows.length < 2) { statusEl.textContent = 'データが空です'; return; }
 
-    // ヘッダー確認
-    const header = rows[0].map(h => h.trim());
-    const codeIdx = header.indexOf('商品コード');
-    const qtyIdx = header.indexOf('数量');
+    // ヘッダー行を探す（先頭のメタ情報行をスキップ）
+    let headerRowIdx = 0;
+    let header = rows[0].map(h => h.trim());
+    let codeIdx = header.indexOf('商品コード');
+    let qtyIdx = header.indexOf('数量');
+    let csvSource = 'ごくーCSV';
+    let detectedPeriodFrom = '';
+    let detectedPeriodTo = '';
+
     if (codeIdx < 0 || qtyIdx < 0) {
-      statusEl.textContent = '「商品コード」「数量」列が見つかりません';
+      // 楽天SKU別売上CSVフォーマットを検出
+      for (let ri = 0; ri < Math.min(rows.length, 15); ri++) {
+        const h = rows[ri].map(c => c.trim());
+        // 期間行を検出（例: "表示期間,2026年03月27日から2026年04月12日"）
+        if (h[0] === '表示期間' && h[1]) {
+          const m = h[1].match(/(\d{4})年(\d{1,2})月(\d{1,2})日から(\d{4})年(\d{1,2})月(\d{1,2})日/);
+          if (m) {
+            detectedPeriodFrom = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+            detectedPeriodTo = `${m[4]}-${m[5].padStart(2,'0')}-${m[6].padStart(2,'0')}`;
+          }
+        }
+        const skuIdx = h.indexOf('SKU番号');
+        const salesQtyIdx = h.indexOf('売上個数');
+        if (skuIdx >= 0 && salesQtyIdx >= 0) {
+          headerRowIdx = ri;
+          header = h;
+          codeIdx = skuIdx;
+          qtyIdx = salesQtyIdx;
+          csvSource = '楽天SKU別売上';
+          break;
+        }
+      }
+    }
+
+    if (codeIdx < 0 || qtyIdx < 0) {
+      statusEl.textContent = '対応するCSV形式ではありません（ごくーCSV or 楽天SKU別売上）';
       return;
     }
 
@@ -5331,7 +5397,7 @@ async function handleCSVImport(fileInput) {
     const allSKUs = generateAllSKUs();
     const validSKUSet = new Set(allSKUs.map(s => s.sku));
 
-    for (let i = 1; i < rows.length; i++) {
+    for (let i = headerRowIdx + 1; i < rows.length; i++) {
       const row = rows[i];
       if (row.length <= Math.max(codeIdx, qtyIdx)) continue;
       const rawCode = row[codeIdx].trim();
@@ -5342,19 +5408,40 @@ async function handleCSVImport(fileInput) {
       const isShoulder = /_SHO$/.test(normalized);
       if (isShoulder) shoulderCount += qty;
 
-      const baseSKU = normalizeGokuuSKU(rawCode);
-      const expanded = expandCSVSKU(baseSKU);
-
-      // 空配列 = スキップ対象（GIFTBAG等）
-      if (expanded.length === 0) continue;
-
-      expanded.forEach(item => {
-        if (validSKUSet.has(item.sku)) {
-          skuTotals[item.sku] = (skuTotals[item.sku] || 0) + item.qty * qty;
+      if (csvSource === '楽天SKU別売上') {
+        // 楽天CSVのSKU番号はそのまま使える（例: TAL_BK, LBM_BL_sho）
+        const skuKey = normalized.replace(/_SHO$/, '');  // _SHO除去したベースSKU
+        if (validSKUSet.has(skuKey)) {
+          skuTotals[skuKey] = (skuTotals[skuKey] || 0) + qty;
         } else {
-          unmapped[rawCode] = (unmapped[rawCode] || 0) + item.qty * qty;
+          // normalizeGokuuSKUも試す（フォールバック）
+          const baseSKU = normalizeGokuuSKU(rawCode);
+          const expanded = expandCSVSKU(baseSKU);
+          if (expanded.length === 0) continue;
+          let matched = false;
+          expanded.forEach(item => {
+            if (validSKUSet.has(item.sku)) {
+              skuTotals[item.sku] = (skuTotals[item.sku] || 0) + item.qty * qty;
+              matched = true;
+            }
+          });
+          if (!matched) unmapped[rawCode] = (unmapped[rawCode] || 0) + qty;
         }
-      });
+      } else {
+        const baseSKU = normalizeGokuuSKU(rawCode);
+        const expanded = expandCSVSKU(baseSKU);
+
+        // 空配列 = スキップ対象（GIFTBAG等）
+        if (expanded.length === 0) continue;
+
+        expanded.forEach(item => {
+          if (validSKUSet.has(item.sku)) {
+            skuTotals[item.sku] = (skuTotals[item.sku] || 0) + item.qty * qty;
+          } else {
+            unmapped[rawCode] = (unmapped[rawCode] || 0) + item.qty * qty;
+          }
+        });
+      }
     }
 
     const totalQty = Object.values(skuTotals).reduce((a, b) => a + b, 0);
@@ -5372,16 +5459,17 @@ async function handleCSVImport(fileInput) {
       html += `<div style="font-size:13px; color:#ff9500; margin-bottom:4px;">⚠️ 未登録: ${Object.keys(unmapped).length}件 / ${unmappedCount}個（${Object.keys(unmapped).join(', ')}）</div>`;
     }
 
-    // 期間入力
+    // 期間入力（楽天CSVから期間を検出した場合はそれをデフォルトに）
     const today = new Date().toISOString().split('T')[0];
     const coverageEnd = getSalesCoverageEnd();
-    const defaultFrom = coverageEnd ? new Date(new Date(coverageEnd).getTime() + 86400000).toISOString().split('T')[0] : '';
+    const defaultFrom = detectedPeriodFrom || (coverageEnd ? new Date(new Date(coverageEnd).getTime() + 86400000).toISOString().split('T')[0] : '');
+    const defaultTo = detectedPeriodTo || today;
     html += '<div style="margin-top:12px; padding:12px; background:#f5f5f7; border-radius:10px;">';
     html += '<div style="font-size:13px; font-weight:600; margin-bottom:8px;">📅 注文期間</div>';
     html += '<div style="display:flex; gap:8px; align-items:center;">';
     html += `<input type="date" id="csv-date-from" value="${defaultFrom}" style="padding:8px; border:1px solid #e5e5ea; border-radius:8px; font-size:14px;">`;
     html += '<span style="font-size:14px;">〜</span>';
-    html += `<input type="date" id="csv-date-to" value="${today}" style="padding:8px; border:1px solid #e5e5ea; border-radius:8px; font-size:14px;">`;
+    html += `<input type="date" id="csv-date-to" value="${defaultTo}" style="padding:8px; border:1px solid #e5e5ea; border-radius:8px; font-size:14px;">`;
     html += '</div>';
     html += '<div id="csv-date-overlap-warn" style="margin-top:6px;"></div>';
     html += '</div>';
@@ -5405,7 +5493,7 @@ async function handleCSVImport(fileInput) {
     statusEl.textContent = '';
 
     // 一時保存（確定ボタンで使う）
-    window._pendingCSVImport = { skuTotals, fileName: file.name, unmapped, shoulderCount };
+    window._pendingCSVImport = { skuTotals, fileName: file.name, unmapped, shoulderCount, csvSource };
 
   } catch(e) {
     statusEl.textContent = 'エラー: ' + e.message;
@@ -5482,9 +5570,11 @@ function confirmCSVImport() {
     if (!confirm(`以下の期間と重複しています:\n${overlapList}\n\n重複分を上書きしますか？（古いデータを削除して新しいデータに置き換えます）`)) {
       return;
     }
-    // 重複するインポートを削除
+    // 重複するインポートを削除（GASからも削除）
     const removeIds = new Set(overlapping.map(o => o.importId));
+    const toRemove = state.records.filter(r => r.type === '販売' && removeIds.has(r.importId));
     state.records = state.records.filter(r => !(r.type === '販売' && removeIds.has(r.importId)));
+    toRemove.forEach(r => gasPost('delete', { record: r }));
   }
 
   const now = new Date().toISOString();
@@ -5504,7 +5594,7 @@ function confirmCSVImport() {
       product: productCode,
       color: colorCode,
       quantity: qty,
-      source: 'ごくーCSV',
+      source: data.csvSource || 'ごくーCSV',
       importId: importId,
       fileName: data.fileName,
       periodFrom: periodFrom,
@@ -5521,7 +5611,7 @@ function confirmCSVImport() {
       productName: 'ショルダーベルト',
       color: '',
       quantity: data.shoulderCount,
-      source: 'ごくーCSV（SHO自動）',
+      source: (data.csvSource || 'ごくーCSV') + '（SHO自動）',
       importId: importId,
       fileName: data.fileName,
       periodFrom: periodFrom,
@@ -5530,7 +5620,7 @@ function confirmCSVImport() {
   }
 
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
-  gasPost('addBatch', { records: state.records.filter(r => r.importId === importId) });
+  gasPost('bulkAdd', { records: state.records.filter(r => r.importId === importId) });
 
   // UI更新
   document.getElementById('csv-preview').style.display = 'none';
@@ -5632,12 +5722,15 @@ function refreshHanbaiHistory() {
 
 function undoSalesImport(importId) {
   if (!confirm('この販売データを取り消しますか？')) return;
-  state.records = state.records.filter(r => {
-    if (r.type !== '販売') return true;
+  const toDelete = state.records.filter(r => {
+    if (r.type !== '販売') return false;
     const gid = r.importId || 'manual_' + r.date;
-    return gid !== importId;
+    return gid === importId;
   });
+  state.records = state.records.filter(r => !toDelete.includes(r));
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  // GASからも削除
+  toDelete.forEach(r => gasPost('delete', { record: r }));
   refreshHanbaiSheet();
   refreshHanbaiHistory();
   refreshZentaiTable();
