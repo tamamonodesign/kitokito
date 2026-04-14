@@ -4208,7 +4208,7 @@ function exportZentaiCSV() {
     PRODUCTION_TARGET_DATA.forEach(d => { targetMap[d.pg] = d.target || 0; });
   }
 
-  const rows = [['SKU','商品名','カラー','生産目標','棚卸し','入庫','販売','現在庫','内職中','検品待ち','入庫待ち','B品','不良']];
+  const rows = [['SKU','商品名','カラー','生産目標','棚卸し','入庫','25年実績','26年累積','現在庫','内職中','検品待ち','入庫待ち','B品','不良']];
 
   allSKUs.forEach(s => {
     const a = agg[s.sku];
@@ -4232,7 +4232,9 @@ function exportZentaiCSV() {
     const hasData = target || a.mochidashi || a.nouhin || a.kenpinOk || a.kenpinB || a.kenpinRejected || a.nyukoQty || hanbai;
     if (!hasData) return;
 
-    rows.push([s.sku, s.colorName || '', s.colorCode || '', target, a.tanaoroshi, nyukoTotal, hanbai, stock, sewing, waitKenpin, waitNyuko, bGrade, rejected]);
+    const y25 = SALES_2025[s.sku] || 0;
+    const y26 = SALES_2026Q1[s.sku] || 0;
+    rows.push([s.sku, s.colorName || '', s.colorCode || '', target, a.tanaoroshi, nyukoTotal, y25, y26, stock, sewing, waitKenpin, waitNyuko, bGrade, rejected]);
   });
 
   const bom = '\uFEFF';
@@ -5033,7 +5035,8 @@ function refreshZentaiTable() {
   thead += '<th style="width:28px; padding:4px; font-size:10px;">内職</th>';
   thead += '<th style="width:28px; padding:4px; font-size:10px;">父</th>';
   thead += '<th style="width:28px; padding:4px; font-size:10px;">山田</th>';
-  thead += '<th style="width:28px; padding:4px; font-size:10px;">販売</th>';
+  thead += '<th style="width:28px; padding:4px; font-size:10px;">\'25</th>';
+  thead += '<th style="width:28px; padding:4px; font-size:10px;">\'26</th>';
   thead += '<th style="width:32px; padding:4px; font-size:10px;">在庫</th>';
   thead += '<th style="width:22px; padding:4px; font-size:10px;">B</th>';
   thead += '<th style="width:22px; padding:4px; font-size:10px;">✕</th>';
@@ -5092,7 +5095,10 @@ function refreshZentaiTable() {
     tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (sewing || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (waitKenpin || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (waitNyuko || '-') + '</td>';
-    tbody += '<td class="num" style="padding:4px; font-size:12px;">' + (hanbai || '-') + '</td>';
+    const y25 = SALES_2025[s.sku] || 0;
+    const y26 = SALES_2026Q1[s.sku] || 0;
+    tbody += '<td class="num" style="padding:4px; font-size:11px; color:#86868b;">' + (y25 || '-') + '</td>';
+    tbody += '<td class="num" style="padding:4px; font-size:11px; color:#007aff;">' + (y26 || '-') + '</td>';
     const stock = a.tanaoroshi + nyukoTotal - hanbai;
     const hasStockData = a.tanaoroshi || nyukoTotal || hanbai;
     const stockStyle = stock < 0 ? 'color:#ff3b30; font-weight:700;' : stock <= 3 ? 'color:#ff9500; font-weight:600;' : 'color:#34c759; font-weight:600;';
@@ -5107,7 +5113,7 @@ function refreshZentaiTable() {
   });
 
   if (!tbody) {
-    tbody = '<tr><td colspan="10" style="text-align:center; color:#86868b; padding:24px;">データがありません</td></tr>';
+    tbody = '<tr><td colspan="11" style="text-align:center; color:#86868b; padding:24px;">データがありません</td></tr>';
   }
 
   table.querySelector('thead').innerHTML = thead;
