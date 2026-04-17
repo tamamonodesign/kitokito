@@ -5971,6 +5971,7 @@ function refreshZentaiTable() {
     // 販売: 棚卸し以降のCSV販売のみカウント
     const tanaDate = a.tanaDate || '';
     let csvSales = 0;
+    let shoulderSales = 0; // このSKUの累計ショルダー販売
     state.records.filter(r => r.type === '販売').forEach(r => {
       const rSku = r.product + '_' + (r.color || '').split(' ')[0];
       if (rSku !== s.sku) return;
@@ -5979,8 +5980,22 @@ function refreshZentaiTable() {
       if (!tanaDate || salesDate > tanaDate) {
         csvSales += (r.quantity || 0);
       }
+      shoulderSales += (r.shoulderQty || 0); // ショルダー販売は期間問わず全履歴を累計
     });
     const hanbai = (hanbaiData.totals[s.sku] || 0) + csvSales;
+
+    // ショルダー加工納品・持ち出し累計
+    let shoulderNouhin = 0, shoulderMochidashi = 0;
+    state.records.forEach(r => {
+      const rSku = r.product + '_' + (r.color || '').split(' ')[0];
+      if (rSku !== s.sku) return;
+      if (r.type === 'ショルダー加工納品') shoulderNouhin += (r.quantity || 0);
+      else if (r.type === 'ショルダー加工持ち出し') shoulderMochidashi += (r.quantity || 0);
+    });
+    // ショルダー在庫 = 加工納品累計 - ショルダー販売累計
+    const shoulderInStock = Math.max(0, shoulderNouhin - shoulderSales);
+    // 加工中（持ち出し済み未納品）
+    const shoulderInProcess = Math.max(0, shoulderMochidashi - shoulderNouhin);
 
     // 生産目標を取得（生産グループから）
     const pg = s.sku; // 基本は SKU = PG
@@ -6017,7 +6032,15 @@ function refreshZentaiTable() {
     const stock = a.tanaoroshi + nyukoTotal - hanbai;
     const hasStockData = a.tanaoroshi || nyukoTotal || hanbai;
     const stockStyle = stock < 0 ? 'color:#ff3b30; font-weight:700;' : stock <= 3 ? 'color:#ff9500; font-weight:600;' : 'color:#34c759; font-weight:600;';
-    tbody += '<td class="num" style="padding:4px; font-size:12px; ' + stockStyle + '">' + (hasStockData ? stock : '-') + '</td>';
+    // ショルダーバッジ: 加工納品 or 販売済みがあれば表示
+    let shoulderBadge = '';
+    if (shoulderInStock > 0 || shoulderInProcess > 0) {
+      const parts = [];
+      if (shoulderInStock > 0) parts.push(`🔗${shoulderInStock}`);
+      if (shoulderInProcess > 0) parts.push(`加工中${shoulderInProcess}`);
+      shoulderBadge = `<div style="font-size:9px; color:#0071e3; font-weight:600; margin-top:1px;">${parts.join(' ')}</div>`;
+    }
+    tbody += '<td class="num" style="padding:4px; font-size:12px; ' + stockStyle + '">' + (hasStockData ? stock : '-') + shoulderBadge + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff9500;">' + (bGrade || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff3b30;">' + (rejected || '-') + '</td>';
     const partsData = encodeURIComponent(JSON.stringify(mat.parts));
@@ -6346,6 +6369,7 @@ async function handleCSVImport(fileInput) {
 
     // SKU集計
     const skuTotals = {};
+    const skuTotalsShoulder = {}; // _SHO付きのSKU別販売数
     const unmapped = {};
     let shoulderCount = 0; // _SHO付きの総数（ショルダーベルト消費数）
     const allSKUs = generateAllSKUs();
@@ -6367,6 +6391,7 @@ async function handleCSVImport(fileInput) {
         const skuKey = normalized.replace(/_SHO$/, '');  // _SHO除去したベースSKU
         if (validSKUSet.has(skuKey)) {
           skuTotals[skuKey] = (skuTotals[skuKey] || 0) + qty;
+          if (isShoulder) skuTotalsShoulder[skuKey] = (skuTotalsShoulder[skuKey] || 0) + qty;
         } else {
           // normalizeGokuuSKUも試す（フォールバック）
           const baseSKU = normalizeGokuuSKU(rawCode);
@@ -6447,7 +6472,7 @@ async function handleCSVImport(fileInput) {
     statusEl.textContent = '';
 
     // 一時保存（確定ボタンで使う）
-    window._pendingCSVImport = { skuTotals, fileName: file.name, unmapped, shoulderCount, csvSource };
+    window._pendingCSVImport = { skuTotals, skuTotalsShoulder, fileName: file.name, unmapped, shoulderCount, csvSource };
 
   } catch(e) {
     statusEl.textContent = 'エラー: ' + e.message;
@@ -6536,11 +6561,13 @@ function confirmCSVImport() {
 
   // 販売レコードとして登録
   const allSKUs = generateAllSKUs();
+  const shoulderMap = data.skuTotalsShoulder || {};
   Object.entries(data.skuTotals).forEach(([sku, qty]) => {
     const match = allSKUs.find(s => s.sku === sku);
     const parts = sku.split('_');
     const productCode = match ? match.productCode : parts[0];
     const colorCode = match ? match.colorCode : parts.slice(1).join('_');
+    const shoulderQty = shoulderMap[sku] || 0;
 
     state.records.push({
       date: now,
@@ -6548,6 +6575,7 @@ function confirmCSVImport() {
       product: productCode,
       color: colorCode,
       quantity: qty,
+      shoulderQty: shoulderQty, // このうちショルダー付きで販売した数
       source: data.csvSource || 'ごくーCSV',
       importId: importId,
       fileName: data.fileName,
