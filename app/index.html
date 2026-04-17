@@ -201,10 +201,15 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
         <div class="role-name">全体管理</div>
         <div class="role-desc">材料アラート・生産進捗・売上</div>
       </button>
-      <button class="role-btn" onclick="showDashboard('mom')">
+      <button class="role-btn" onclick="showScreen('screen-seizo-order')">
         <div class="role-icon">🧵</div>
         <div class="role-name">製造管理</div>
-        <div class="role-desc">急ぎ・進行中・次の仕事</div>
+        <div class="role-desc">縫製発注・優先度管理</div>
+      </button>
+      <button class="role-btn" onclick="showDashboard('mom')">
+        <div class="role-icon">📊</div>
+        <div class="role-name">進捗管理</div>
+        <div class="role-desc">持ち出し・納品・検品・入庫の確認と修正</div>
       </button>
       <button class="role-btn" onclick="startKenpin()">
         <div class="role-icon">🔍</div>
@@ -557,17 +562,126 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     </div>
   </div>
 
-  <!-- ========== お母さんダッシュボード ========== -->
+  <!-- ========== 進捗管理ダッシュボード ========== -->
   <div id="screen-dash-mom" class="hidden">
     <button class="back-btn" onclick="showScreen('screen-top')">← もどる</button>
-    <h1>🧵 製造管理</h1>
-    <p class="subtitle">急ぎ・進行中・次の仕事</p>
+    <h1>📊 進捗管理</h1>
+    <p class="subtitle">記録の確認と修正（タップで詳細）</p>
 
-    <div class="section-title">🧵 今走ってる仕事（内職持ち出し中）</div>
+    <div class="section-title">🧵 持ち出し中の仕事</div>
     <div id="mom-active-jobs"></div>
 
-    <div class="section-title">📦 最近の入庫</div>
+    <div class="section-title" style="margin-top:24px">📦 最近の納品</div>
+    <div id="mom-recent-nouhin"></div>
+
+    <div class="section-title" style="margin-top:24px">🔍 最近の検品</div>
+    <div id="mom-recent-kenpin"></div>
+
+    <div class="section-title" style="margin-top:24px">📥 最近の入庫</div>
     <div id="mom-recent-stock"></div>
+  </div>
+
+  <!-- ========== 製造管理（縫製発注）========== -->
+  <div id="screen-seizo-order" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-top')">← もどる</button>
+    <h1>🧵 製造管理</h1>
+    <p class="subtitle">縫製発注・優先度管理</p>
+
+    <div style="display:flex; gap:8px; margin-bottom:16px;">
+      <button class="menu-btn" onclick="startNewOrder()" style="flex:1; padding:14px;">
+        <div class="icon">➕</div>
+        <div class="text">新規発注</div>
+      </button>
+    </div>
+
+    <div class="section-title">🔥 急ぎ</div>
+    <div id="order-list-urgent"></div>
+
+    <div class="section-title" style="margin-top:20px">📋 通常</div>
+    <div id="order-list-normal"></div>
+
+    <div class="section-title" style="margin-top:20px">🕓 余裕あり</div>
+    <div id="order-list-low"></div>
+
+    <div class="section-title" style="margin-top:20px">✅ 完了</div>
+    <div id="order-list-done"></div>
+  </div>
+
+  <!-- ========== 縫製発注：新規・編集 ========== -->
+  <div id="screen-order-form" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-seizo-order')">← もどる</button>
+    <h1 id="order-form-title">🧵 新規発注</h1>
+    <p class="subtitle">内職さんに縫ってもらう仕事を発注</p>
+
+    <div class="section-title" style="font-size:14px;">👤 発注者</div>
+    <div id="order-requester-buttons" style="display:flex; gap:8px; margin-bottom:14px;"></div>
+
+    <div class="section-title" style="font-size:14px;">📦 商品</div>
+    <div id="order-product-display" style="background:white; border-radius:12px; padding:14px; margin-bottom:8px; box-shadow:0 1px 4px rgba(0,0,0,0.06); min-height:44px; font-size:15px; color:#aeaeb2;">未選択</div>
+    <button class="menu-btn" onclick="openOrderProductPicker()" style="width:100%; padding:12px; margin-bottom:14px;"><div class="text">商品・カラーを選ぶ</div></button>
+
+    <div class="section-title" style="font-size:14px;">🔢 数量</div>
+    <div style="background:white; border-radius:12px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button onclick="changeOrderQty(-1)" style="width:40px; height:40px; border:none; background:#f2f2f7; border-radius:10px; font-size:20px; font-weight:600;">−</button>
+        <input type="number" id="order-qty-input" value="10" min="1"
+          onchange="setOrderQty(this.value)"
+          style="flex:1; text-align:center; font-size:22px; font-weight:600; border:1px solid #e5e5ea; border-radius:10px; padding:8px;">
+        <button onclick="changeOrderQty(1)" style="width:40px; height:40px; border:none; background:#f2f2f7; border-radius:10px; font-size:20px; font-weight:600;">＋</button>
+      </div>
+    </div>
+
+    <div class="section-title" style="font-size:14px;">📅 納期（任意）</div>
+    <input type="date" id="order-due-input" onchange="orderState.dueDate=this.value"
+      style="width:100%; background:white; border-radius:12px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,0.06); border:none; font-size:15px;">
+
+    <div class="section-title" style="font-size:14px;">⚡ 優先度</div>
+    <div id="order-priority-buttons" style="display:flex; gap:8px; margin-bottom:14px;"></div>
+
+    <div class="section-title" style="font-size:14px;">📝 メモ（任意）</div>
+    <textarea id="order-memo-input" onchange="orderState.memo=this.value"
+      placeholder="色の希望・ロット指定など"
+      style="width:100%; min-height:70px; background:white; border-radius:12px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,0.06); border:none; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+
+    <div id="order-form-actions" style="display:flex; gap:12px;"></div>
+  </div>
+
+  <!-- ========== 縫製発注：商品ピッカー ========== -->
+  <div id="screen-order-product-picker" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-order-form')">← もどる</button>
+    <h1 id="order-picker-title">📦 商品を選ぶ</h1>
+    <div id="order-picker-list"></div>
+  </div>
+
+  <!-- ========== 縫製発注：詳細 ========== -->
+  <div id="screen-order-detail" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-seizo-order')">← もどる</button>
+    <h1>📄 発注詳細</h1>
+    <div id="order-detail-info" style="background:white; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"></div>
+
+    <div class="section-title" style="font-size:14px;">📌 ステータス</div>
+    <div id="order-detail-status-buttons" style="display:flex; gap:8px; margin-bottom:20px;"></div>
+
+    <div style="display:flex; gap:12px;">
+      <button class="submit-btn" onclick="deleteOrder()" style="flex:1; background:#ff3b30; color:white;">🗑️ 削除</button>
+      <button class="submit-btn ready" onclick="editOrder()" style="flex:2;">✏️ 編集する</button>
+    </div>
+  </div>
+
+  <!-- ========== 記録修正画面 ========== -->
+  <div id="screen-record-edit" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-dash-mom')">← もどる</button>
+    <h1>✏️ 記録を修正</h1>
+    <p class="subtitle" id="edit-record-type"></p>
+
+    <div id="edit-record-info" style="background:white; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"></div>
+
+    <div id="edit-fields"></div>
+
+    <div style="display:flex; gap:12px; margin-top:24px;">
+      <button class="submit-btn" onclick="deleteEditRecord()" style="flex:1; background:#ff3b30; color:white;">🗑️ 削除</button>
+      <button class="submit-btn ready" onclick="saveEditRecord()" style="flex:2;">💾 保存する</button>
+    </div>
   </div>
 
   <!-- ========== 検品ダッシュボード ========== -->
@@ -2423,16 +2537,26 @@ function undoLastRecord() {
 let nouhinState = { name: '', product: null, color: '', quantity: 5, sourceRecord: null };
 
 function getActiveJobs() {
-  const mochidashi = state.records.filter(r => r.type === '持ち出し');
+  // 古い持ち出しから順にFIFOで納品を消し込む
+  const mochidashi = state.records.filter(r => r.type === '持ち出し')
+    .slice().sort((a,b) => (a.date||'').localeCompare(b.date||''));
   const nouhin = state.records.filter(r => r.type === '納品');
 
-  // 持ち出しごとに納品済み数を計算
+  // キー（人・商品・カラー）ごとの納品合計プール
+  const pool = {};
+  nouhin.forEach(n => {
+    const key = `${n.name}|${n.product}|${n.color}`;
+    pool[key] = (pool[key] || 0) + (parseInt(n.quantity) || 0);
+  });
+
+  // 古い順にプール消費
   return mochidashi.map(m => {
-    // 同じ人・商品・カラーの納品数を合計
-    const delivered = nouhin
-      .filter(n => n.name === m.name && n.product === m.product && n.color === m.color && n.date > m.date)
-      .reduce((sum, n) => sum + (parseInt(n.quantity) || 0), 0);
-    const remaining = Math.max(0, (parseInt(m.quantity) || 0) - delivered);
+    const key = `${m.name}|${m.product}|${m.color}`;
+    const mq = parseInt(m.quantity) || 0;
+    const avail = pool[key] || 0;
+    const delivered = Math.min(mq, avail);
+    pool[key] = avail - delivered;
+    const remaining = mq - delivered;
     return { ...m, delivered, remaining };
   }).filter(m => m.remaining > 0); // 残数がある仕事だけ
 }
@@ -3780,48 +3904,498 @@ function refreshStockSummary() {
   el.innerHTML = html;
 }
 
-// --- お母さんダッシュボード ---
+// --- 進捗管理ダッシュボード ---
 function refreshMomDash() {
-  // 持ち出し中（未納品）
-  const mochidashi = state.records.filter(r => r.type === '持ち出し');
-  const nouhin = state.records.filter(r => r.type === '納品');
-  const active = mochidashi.filter(m =>
-    !nouhin.some(n => n.name === m.name && n.product === m.product && n.color === m.color && n.date > m.date)
-  );
+  // 修正ボタン付き共通レンダリング
+  const editBtnHtml = (record) => {
+    const json = JSON.stringify(record).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    return `<button onclick='openEditRecord(${JSON.stringify(record).replace(/'/g, "&#39;")})'
+      style="background:#f2f2f7; border:none; border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer; color:#007aff; font-weight:600;">✏️修正</button>`;
+  };
+  const rowStyle = 'display:flex; justify-content:space-between; align-items:center; gap:8px;';
 
+  // --- 1. 持ち出し中の仕事（FIFO残数あり）---
+  const active = getActiveJobs();
   const el1 = document.getElementById('mom-active-jobs');
   if (el1) {
     if (active.length === 0) {
       el1.innerHTML = '<div class="alert-card ok"><div class="alert-title">現在持ち出し中の仕事はありません</div></div>';
     } else {
       el1.innerHTML = active.map(m => {
-        const name = SKU_NAMES[m.product] || m.productName || m.product;
+        const isParts = m.color === 'なし';
+        const unit = isParts ? 'セット' : '枚';
+        const colorText = isParts ? '' : ` ${m.color}`;
         return `<div class="alert-card warning">
-          <div class="alert-title">${m.name}さん：${m.product} ${m.color} ×${m.quantity} <span class="badge orange">縫製中</span></div>
-          <div class="alert-detail">${fmtDate(m.date)} 持ち出し</div>
+          <div style="${rowStyle}">
+            <div style="flex:1; min-width:0;">
+              <div class="alert-title">${m.name}さん：${m.product}${colorText} ×${m.quantity}${unit}</div>
+              <div class="alert-detail">${fmtDate(m.date)} 持ち出し ／ 残り${m.remaining}${unit}</div>
+            </div>
+            ${editBtnHtml(m)}
+          </div>
         </div>`;
       }).join('');
     }
   }
 
-  // 最近の入庫
-  const nyuko = state.records.filter(r => r.type === '入庫');
-  const el2 = document.getElementById('mom-recent-stock');
-  if (el2) {
-    const recent = [...nyuko].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-    if (recent.length === 0) {
-      el2.innerHTML = '<div class="no-data">入庫記録はまだありません</div>';
+  // --- 2. 最近の納品 ---
+  const nouhin = state.records.filter(r => r.type === '納品')
+    .slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, 10);
+  const el2n = document.getElementById('mom-recent-nouhin');
+  if (el2n) {
+    if (nouhin.length === 0) {
+      el2n.innerHTML = '<div class="no-data">納品記録はまだありません</div>';
     } else {
-      el2.innerHTML = recent.map(r => {
-        const name = SKU_NAMES[r.product] || r.productName || r.product;
-        return `<div class="alert-card ok">
-          <div class="alert-title">${r.product} ${colorLabel(r.color)} OK:${r.quantity} ${r.bGrade > 0 ? 'B品:' + r.bGrade : ''}</div>
-          <div class="alert-detail">${fmtDate(r.date)} 入庫</div>
+      el2n.innerHTML = nouhin.map(r => {
+        const isParts = r.color === 'なし';
+        const unit = isParts ? 'セット' : '枚';
+        const colorText = isParts ? '' : ` ${r.color}`;
+        return `<div class="alert-card">
+          <div style="${rowStyle}">
+            <div style="flex:1; min-width:0;">
+              <div class="alert-title">${r.name}さん：${r.product}${colorText} ×${r.quantity}${unit}</div>
+              <div class="alert-detail">${fmtDate(r.date)} 納品</div>
+            </div>
+            ${editBtnHtml(r)}
+          </div>
         </div>`;
       }).join('');
     }
   }
 
+  // --- 3. 最近の検品 ---
+  const kenpin = state.records.filter(r => r.type === '検品完了')
+    .slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, 10);
+  const el3 = document.getElementById('mom-recent-kenpin');
+  if (el3) {
+    if (kenpin.length === 0) {
+      el3.innerHTML = '<div class="no-data">検品記録はまだありません</div>';
+    } else {
+      el3.innerHTML = kenpin.map(r => {
+        const isParts = r.color === 'なし';
+        const unit = isParts ? 'セット' : '枚';
+        const colorText = isParts ? '' : ` ${r.color}`;
+        const ok = r.quantityOk || 0, b = r.quantityBGrade || 0, ng = r.quantityRejected || 0;
+        return `<div class="alert-card">
+          <div style="${rowStyle}">
+            <div style="flex:1; min-width:0;">
+              <div class="alert-title">${r.product}${colorText} OK:${ok}${b>0?' B:'+b:''}${ng>0?' 不可:'+ng:''}</div>
+              <div class="alert-detail">${fmtDate(r.date)} 検品（${r.name}さん納品分）</div>
+            </div>
+            ${editBtnHtml(r)}
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // --- 4. 最近の入庫 ---
+  const nyuko = state.records.filter(r => r.type === '入庫')
+    .slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, 10);
+  const el4 = document.getElementById('mom-recent-stock');
+  if (el4) {
+    if (nyuko.length === 0) {
+      el4.innerHTML = '<div class="no-data">入庫記録はまだありません</div>';
+    } else {
+      el4.innerHTML = nyuko.map(r => {
+        const b = r.bGrade || 0;
+        return `<div class="alert-card ok">
+          <div style="${rowStyle}">
+            <div style="flex:1; min-width:0;">
+              <div class="alert-title">${r.product} ${colorLabel(r.color)} OK:${r.quantity}${b>0?' B品:'+b:''}</div>
+              <div class="alert-detail">${fmtDate(r.date)} 入庫</div>
+            </div>
+            ${editBtnHtml(r)}
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// ===== 記録修正フロー =====
+let editState = { original: null, edited: null };
+
+// 記録の一意キー（date+type+product+color+name）で state.records から検索
+function findRecordIndex(rec) {
+  return state.records.findIndex(r =>
+    r.date === rec.date &&
+    r.type === rec.type &&
+    r.product === rec.product &&
+    r.color === rec.color &&
+    (r.name || '') === (rec.name || '')
+  );
+}
+
+function openEditRecord(record) {
+  editState.original = JSON.parse(JSON.stringify(record));
+  editState.edited = JSON.parse(JSON.stringify(record));
+
+  const isParts = record.color === 'なし';
+  const unit = isParts ? 'セット' : '枚';
+  const colorText = isParts ? '' : ` ${record.color}`;
+
+  document.getElementById('edit-record-type').textContent = `種別：${record.type}`;
+  document.getElementById('edit-record-info').innerHTML =
+    `<div style="font-size:13px; color:#86868b; margin-bottom:4px;">修正する記録</div>`
+    + `<div style="font-size:16px; font-weight:600;">${record.product}${colorText}</div>`
+    + (record.productName ? `<div style="font-size:13px; color:#86868b; margin-top:2px;">${record.productName}</div>` : '')
+    + (record.name ? `<div style="font-size:14px; margin-top:6px;">👤 ${record.name}さん</div>` : '')
+    + `<div style="font-size:12px; color:#aeaeb2; margin-top:4px;">${fmtDate(record.date)}</div>`;
+
+  // 種別ごとに編集可能フィールドを構築
+  let fieldsHtml = '';
+  const qtyRow = (label, key, value, min = 0) => `
+    <div style="background:white; border-radius:12px; padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+      <div style="font-size:13px; color:#86868b; margin-bottom:6px;">${label}</div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button onclick="changeEditQty('${key}', -1, ${min})" style="width:40px; height:40px; border:none; background:#f2f2f7; border-radius:10px; font-size:20px; font-weight:600; cursor:pointer;">−</button>
+        <input type="number" id="edit-input-${key}" value="${value || 0}" min="${min}"
+          onchange="setEditQty('${key}', this.value, ${min})"
+          style="flex:1; text-align:center; font-size:22px; font-weight:600; border:1px solid #e5e5ea; border-radius:10px; padding:8px; -moz-appearance:textfield;">
+        <button onclick="changeEditQty('${key}', 1, ${min})" style="width:40px; height:40px; border:none; background:#f2f2f7; border-radius:10px; font-size:20px; font-weight:600; cursor:pointer;">＋</button>
+      </div>
+    </div>`;
+
+  if (record.type === '持ち出し' || record.type === '納品') {
+    fieldsHtml = qtyRow(`${record.type}数量（${unit}）`, 'quantity', record.quantity || 0, 1);
+  } else if (record.type === '検品完了') {
+    fieldsHtml =
+      qtyRow(`✅ OK数（${unit}）`, 'quantityOk', record.quantityOk || 0)
+      + qtyRow(`⚠️ B品数（${unit}）`, 'quantityBGrade', record.quantityBGrade || 0)
+      + qtyRow(`❌ 不可数（${unit}）`, 'quantityRejected', record.quantityRejected || 0);
+  } else if (record.type === '入庫') {
+    fieldsHtml =
+      qtyRow(`✅ OK数（${unit}）`, 'quantity', record.quantity || 0)
+      + qtyRow(`⚠️ B品数（${unit}）`, 'bGrade', record.bGrade || 0);
+  } else {
+    // その他（裁断・プリント・材料発注・材料入荷など）は数量のみ
+    fieldsHtml = qtyRow('数量', 'quantity', record.quantity || 0);
+  }
+
+  document.getElementById('edit-fields').innerHTML = fieldsHtml;
+  showScreen('screen-record-edit');
+}
+
+function changeEditQty(key, delta, min) {
+  const cur = parseInt(editState.edited[key]) || 0;
+  const next = Math.max(min || 0, cur + delta);
+  editState.edited[key] = next;
+  const el = document.getElementById('edit-input-' + key);
+  if (el) el.value = next;
+}
+
+function setEditQty(key, val, min) {
+  const n = Math.max(min || 0, parseInt(val) || 0);
+  editState.edited[key] = n;
+  const el = document.getElementById('edit-input-' + key);
+  if (el) el.value = n;
+}
+
+function saveEditRecord() {
+  if (!editState.original || !editState.edited) return;
+  const idx = findRecordIndex(editState.original);
+  if (idx < 0) {
+    alert('元の記録が見つかりませんでした');
+    return;
+  }
+  if (!confirm('この内容で修正を保存しますか？')) return;
+
+  // GAS側は delete → add で置換
+  const oldRec = state.records[idx];
+  state.records[idx] = editState.edited;
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('delete', { record: oldRec }).then(() => {
+    gasPost('add', { record: editState.edited });
+  });
+
+  editState = { original: null, edited: null };
+  alert('修正しました');
+  showScreen('screen-dash-mom');
+  refreshMomDash();
+}
+
+function deleteEditRecord() {
+  if (!editState.original) return;
+  if (!confirm('この記録を削除しますか？\n（取り消せません）')) return;
+
+  const idx = findRecordIndex(editState.original);
+  if (idx < 0) {
+    alert('元の記録が見つかりませんでした');
+    return;
+  }
+  const oldRec = state.records[idx];
+  state.records.splice(idx, 1);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('delete', { record: oldRec });
+
+  editState = { original: null, edited: null };
+  alert('削除しました');
+  showScreen('screen-dash-mom');
+  refreshMomDash();
+}
+
+// ===== 縫製発注 =====
+const ORDER_REQUESTERS = ['めぐ', '山田'];
+const ORDER_PRIORITIES = [
+  { id: 'urgent', label: '🔥 急ぎ', color: '#ff3b30' },
+  { id: 'normal', label: '📋 通常', color: '#007aff' },
+  { id: 'low',    label: '🕓 余裕', color: '#86868b' },
+];
+const ORDER_STATUSES = [
+  { id: 'todo',     label: '未着手', color: '#ff9500' },
+  { id: 'doing',    label: '着手中', color: '#007aff' },
+  { id: 'done',     label: '完了',   color: '#34c759' },
+];
+
+let orderState = {
+  mode: 'new', // 'new' | 'edit'
+  id: null,
+  requester: 'めぐ',
+  product: '',
+  productName: '',
+  color: '',
+  quantity: 10,
+  dueDate: '',
+  priority: 'normal',
+  status: 'todo',
+  memo: ''
+};
+
+function loadOrders() {
+  try { return JSON.parse(localStorage.getItem('kitokito_orders') || '[]'); }
+  catch(e) { return []; }
+}
+
+function saveOrders(orders) {
+  localStorage.setItem('kitokito_orders', JSON.stringify(orders));
+}
+
+function refreshOrderList() {
+  const orders = loadOrders();
+  const byBucket = { urgent: [], normal: [], low: [], done: [] };
+  orders.forEach(o => {
+    if (o.status === 'done') byBucket.done.push(o);
+    else byBucket[o.priority || 'normal'].push(o);
+  });
+  // 納期昇順、なしは後ろ
+  const dueSort = (a, b) => {
+    if (!a.dueDate && !b.dueDate) return (a.createdAt||'').localeCompare(b.createdAt||'');
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  };
+  Object.keys(byBucket).forEach(k => byBucket[k].sort(dueSort));
+
+  const render = (list, elId, emptyMsg) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (list.length === 0) {
+      el.innerHTML = `<div class="no-data" style="color:#aeaeb2; font-size:13px; padding:8px 4px;">${emptyMsg}</div>`;
+      return;
+    }
+    el.innerHTML = list.map(o => {
+      const status = ORDER_STATUSES.find(s => s.id === o.status) || ORDER_STATUSES[0];
+      const due = o.dueDate ? `📅 ${o.dueDate}` : '';
+      const colorText = o.color ? ` ${o.color}` : '';
+      return `<div class="alert-card" onclick='openOrderDetail("${o.id}")'
+        style="cursor:pointer; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:16px; font-weight:600;">${o.product}${colorText} ×${o.quantity}</div>
+            <div style="font-size:12px; color:#86868b; margin-top:2px;">${o.productName || ''}</div>
+            <div style="font-size:12px; color:#86868b; margin-top:4px;">
+              <span style="color:${status.color}; font-weight:600;">● ${status.label}</span>
+              ${due ? ` ・ ${due}` : ''}
+              ・ 👤 ${o.requester}
+            </div>
+            ${o.memo ? `<div style="font-size:12px; color:#86868b; margin-top:4px; padding:6px 8px; background:#f5f5f7; border-radius:6px;">📝 ${o.memo}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  };
+  render(byBucket.urgent, 'order-list-urgent', '急ぎの発注はありません');
+  render(byBucket.normal, 'order-list-normal', '通常の発注はありません');
+  render(byBucket.low,    'order-list-low',    '余裕ありの発注はありません');
+  render(byBucket.done,   'order-list-done',   '完了した発注はありません');
+}
+
+function startNewOrder() {
+  orderState = {
+    mode: 'new', id: null, requester: 'めぐ',
+    product: '', productName: '', color: '',
+    quantity: 10, dueDate: '', priority: 'normal', status: 'todo', memo: ''
+  };
+  renderOrderForm();
+  showScreen('screen-order-form');
+}
+
+function renderOrderForm() {
+  document.getElementById('order-form-title').textContent = orderState.mode === 'edit' ? '✏️ 発注を編集' : '🧵 新規発注';
+
+  // 発注者ボタン
+  document.getElementById('order-requester-buttons').innerHTML =
+    ORDER_REQUESTERS.map(n => `
+      <button onclick="selectOrderRequester('${n}')"
+        class="name-btn ${orderState.requester === n ? 'selected' : ''}"
+        style="flex:1; padding:12px; background:${orderState.requester === n ? '#007aff' : 'white'}; color:${orderState.requester === n ? 'white' : 'inherit'}; border:none; border-radius:10px; font-size:15px; font-weight:600; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.06);">${n}</button>
+    `).join('');
+
+  // 商品表示
+  const pEl = document.getElementById('order-product-display');
+  if (orderState.product) {
+    pEl.innerHTML = `<div style="color:#000;"><strong>${orderState.product}</strong>${orderState.color ? ' / ' + orderState.color : ''}</div>
+      ${orderState.productName ? `<div style="font-size:13px; color:#86868b; margin-top:2px;">${orderState.productName}</div>` : ''}`;
+  } else {
+    pEl.innerHTML = '<span style="color:#aeaeb2;">未選択</span>';
+  }
+
+  // 数量
+  document.getElementById('order-qty-input').value = orderState.quantity;
+
+  // 納期
+  document.getElementById('order-due-input').value = orderState.dueDate || '';
+
+  // 優先度
+  document.getElementById('order-priority-buttons').innerHTML =
+    ORDER_PRIORITIES.map(p => `
+      <button onclick="selectOrderPriority('${p.id}')"
+        style="flex:1; padding:12px; background:${orderState.priority === p.id ? p.color : 'white'}; color:${orderState.priority === p.id ? 'white' : p.color}; border:2px solid ${p.color}; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">${p.label}</button>
+    `).join('');
+
+  // メモ
+  document.getElementById('order-memo-input').value = orderState.memo || '';
+
+  // アクションボタン
+  document.getElementById('order-form-actions').innerHTML =
+    `<button class="submit-btn ready" onclick="submitOrder()" style="flex:1;">${orderState.mode === 'edit' ? '💾 更新する' : '✅ 発注する'}</button>`;
+}
+
+function selectOrderRequester(name) { orderState.requester = name; renderOrderForm(); }
+function selectOrderPriority(id) { orderState.priority = id; renderOrderForm(); }
+function changeOrderQty(delta) {
+  orderState.quantity = Math.max(1, (parseInt(orderState.quantity) || 0) + delta);
+  document.getElementById('order-qty-input').value = orderState.quantity;
+}
+function setOrderQty(v) {
+  orderState.quantity = Math.max(1, parseInt(v) || 1);
+  document.getElementById('order-qty-input').value = orderState.quantity;
+}
+
+function openOrderProductPicker() {
+  const el = document.getElementById('order-picker-list');
+  let html = '';
+  // 商品グループごとに表示
+  PRODUCTS.forEach(p => {
+    html += `<div style="background:white; border-radius:12px; padding:14px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+      <div style="font-size:15px; font-weight:600; margin-bottom:8px;">${p.code} ${p.name}</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+    (p.colors || []).forEach(c => {
+      const code = c.split(' ')[0]; // "RD レッド" → "RD"
+      html += `<button onclick="selectOrderProduct('${p.code}', ${JSON.stringify(p.name).replace(/"/g,'&quot;')}, '${c.replace(/'/g,"&#39;")}')"
+        style="padding:8px 12px; background:#f2f2f7; border:none; border-radius:8px; font-size:13px; cursor:pointer;">${c}</button>`;
+    });
+    html += `</div></div>`;
+  });
+  // パーツ
+  PARTS_PRODUCTS.forEach(p => {
+    html += `<div style="background:white; border-radius:12px; padding:14px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+      <div style="font-size:15px; font-weight:600; margin-bottom:8px;">${p.code} ${p.name}（パーツ）</div>
+      <button onclick="selectOrderProduct('${p.code}', ${JSON.stringify(p.name).replace(/"/g,'&quot;')}, 'なし')"
+        style="padding:8px 12px; background:#f2f2f7; border:none; border-radius:8px; font-size:13px; cursor:pointer;">このパーツで発注</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+  showScreen('screen-order-product-picker');
+}
+
+function selectOrderProduct(code, name, color) {
+  orderState.product = code;
+  orderState.productName = name;
+  orderState.color = color;
+  renderOrderForm();
+  showScreen('screen-order-form');
+}
+
+function submitOrder() {
+  if (!orderState.product) { alert('商品を選んでください'); return; }
+  const orders = loadOrders();
+  if (orderState.mode === 'edit' && orderState.id) {
+    const idx = orders.findIndex(o => o.id === orderState.id);
+    if (idx >= 0) {
+      orders[idx] = { ...orders[idx], ...orderState };
+    }
+  } else {
+    const id = 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    orders.push({
+      id,
+      createdAt: new Date().toISOString(),
+      requester: orderState.requester,
+      product: orderState.product,
+      productName: orderState.productName,
+      color: orderState.color,
+      quantity: orderState.quantity,
+      dueDate: orderState.dueDate || '',
+      priority: orderState.priority,
+      status: 'todo',
+      memo: orderState.memo || ''
+    });
+  }
+  saveOrders(orders);
+  showScreen('screen-seizo-order');
+  refreshOrderList();
+}
+
+function openOrderDetail(id) {
+  const orders = loadOrders();
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  orderState = { ...orderState, mode: 'edit', ...o };
+
+  const prio = ORDER_PRIORITIES.find(p => p.id === o.priority) || ORDER_PRIORITIES[1];
+  const due = o.dueDate ? `📅 納期：${o.dueDate}` : '📅 納期：未設定';
+  document.getElementById('order-detail-info').innerHTML =
+    `<div style="font-size:13px; color:#86868b; margin-bottom:4px;">発注内容</div>`
+    + `<div style="font-size:18px; font-weight:700;">${o.product}${o.color ? ' / ' + o.color : ''}</div>`
+    + (o.productName ? `<div style="font-size:13px; color:#86868b; margin-top:2px;">${o.productName}</div>` : '')
+    + `<div style="font-size:15px; margin-top:8px;">🔢 ${o.quantity}</div>`
+    + `<div style="font-size:13px; color:${prio.color}; font-weight:600; margin-top:4px;">${prio.label}</div>`
+    + `<div style="font-size:13px; color:#86868b; margin-top:4px;">${due}</div>`
+    + `<div style="font-size:13px; color:#86868b; margin-top:2px;">👤 発注者：${o.requester}</div>`
+    + (o.memo ? `<div style="font-size:13px; margin-top:8px; padding:8px; background:#f5f5f7; border-radius:6px;">📝 ${o.memo}</div>` : '')
+    + `<div style="font-size:11px; color:#aeaeb2; margin-top:6px;">作成：${fmtDate(o.createdAt)}</div>`;
+
+  document.getElementById('order-detail-status-buttons').innerHTML =
+    ORDER_STATUSES.map(s => `
+      <button onclick="setOrderStatus('${s.id}')"
+        style="flex:1; padding:12px; background:${o.status === s.id ? s.color : 'white'}; color:${o.status === s.id ? 'white' : s.color}; border:2px solid ${s.color}; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">${s.label}</button>
+    `).join('');
+
+  showScreen('screen-order-detail');
+}
+
+function setOrderStatus(statusId) {
+  const orders = loadOrders();
+  const idx = orders.findIndex(o => o.id === orderState.id);
+  if (idx < 0) return;
+  orders[idx].status = statusId;
+  saveOrders(orders);
+  orderState.status = statusId;
+  openOrderDetail(orderState.id); // refresh
+}
+
+function editOrder() {
+  renderOrderForm();
+  showScreen('screen-order-form');
+}
+
+function deleteOrder() {
+  if (!confirm('この発注を削除しますか？\n（取り消せません）')) return;
+  const orders = loadOrders().filter(o => o.id !== orderState.id);
+  saveOrders(orders);
+  showScreen('screen-seizo-order');
+  refreshOrderList();
 }
 
 // --- 山田さんダッシュボード ---
@@ -4135,6 +4709,7 @@ showScreen = function(id) {
   if (id === 'screen-dash-mom') refreshMomDash();
   if (id === 'screen-dash-kenpin') refreshKenpinDash();
   if (id === 'screen-dash-yamada') refreshYamadaDash();
+  if (id === 'screen-seizo-order') refreshOrderList();
 };
 
 // Override showDashboard similarly
