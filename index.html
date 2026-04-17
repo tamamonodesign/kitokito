@@ -20,7 +20,6 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
 /* === トップ画面 === */
 .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
-.role-grid .role-btn:nth-child(5) { grid-column: 1 / -1; max-width: 50%; justify-self: center; }
 .role-btn { background: white; border: none; border-radius: 16px; padding: 24px 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.15s; }
 .role-btn:active { transform: scale(0.96); }
 .role-icon { font-size: 48px; margin-bottom: 8px; }
@@ -216,15 +215,15 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
         <div class="role-name">検品</div>
         <div class="role-desc">納品された製品の検品</div>
       </button>
-      <button class="role-btn" onclick="showDashboard('yamada')">
-        <div class="role-icon">🖨</div>
-        <div class="role-name">裁断・プリント・入庫</div>
-        <div class="role-desc">裁断・プリント・入庫の記録</div>
-      </button>
       <button class="role-btn" onclick="showScreen('screen-naishoku-menu')">
         <div class="role-icon">✂️</div>
         <div class="role-name">内職</div>
         <div class="role-desc">持ち出し・納品</div>
+      </button>
+      <button class="role-btn" onclick="showDashboard('yamada')">
+        <div class="role-icon">🖨</div>
+        <div class="role-name">裁断・プリント・入庫</div>
+        <div class="role-desc">裁断・プリント・入庫の記録</div>
       </button>
     </div>
     <div style="text-align:center; margin-top:24px;">
