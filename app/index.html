@@ -337,6 +337,62 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
         <div class="icon">📦</div>
         <div class="text">納品</div>
       </button>
+      <button class="menu-btn" onclick="startShoulderOut()">
+        <div class="icon">🔗</div>
+        <div class="text">ショルダー加工</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== ショルダー加工：持ち出し入力 ========== -->
+  <div id="screen-shoulder-out" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-naishoku-menu')">← もどる</button>
+    <h1>🔗 ショルダー加工 持ち出し</h1>
+    <p class="subtitle">プレーン在庫から加工用に持ち出します</p>
+
+    <div class="section-title" style="font-size:14px;">👤 お名前</div>
+    <div id="shoulder-name-buttons" style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:14px;"></div>
+
+    <div class="section-title" style="font-size:14px;">📦 商品・サイズ・カラー</div>
+    <div id="shoulder-product-display" style="background:white; border-radius:12px; padding:14px; margin-bottom:8px; box-shadow:0 1px 4px rgba(0,0,0,0.06); min-height:44px; font-size:15px; color:#aeaeb2;">未選択</div>
+    <button class="menu-btn" onclick="openShoulderProductPicker()" style="width:100%; padding:12px; margin-bottom:14px;"><div class="text">商品を選ぶ</div></button>
+
+    <div class="section-title" style="font-size:14px;">🔢 加工する個数</div>
+    <div style="background:white; border-radius:12px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button onclick="changeShoulderQty(-1)" style="width:40px; height:40px; border:none; background:#f2f2f7; border-radius:10px; font-size:20px; font-weight:600;">−</button>
+        <input type="number" id="shoulder-qty-input" value="5" min="1" onchange="setShoulderQty(this.value)" style="flex:1; text-align:center; font-size:22px; font-weight:600; border:1px solid #e5e5ea; border-radius:10px; padding:8px;">
+        <button onclick="changeShoulderQty(1)" style="width:40px; height:40px; border:none; background:#f2f2f7; border-radius:10px; font-size:20px; font-weight:600;">＋</button>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="shoulder-submit-btn" onclick="submitShoulderOut()" disabled>名前と商品を選んでください</button>
+  </div>
+
+  <!-- ========== ショルダー加工：商品ピッカー ========== -->
+  <div id="screen-shoulder-picker" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-shoulder-out')">← もどる</button>
+    <h1>📦 商品を選ぶ</h1>
+    <p class="subtitle">レッスンバッグ（LB / LB名入れ）のプレーン在庫から選択</p>
+    <div id="shoulder-picker-list"></div>
+  </div>
+
+  <!-- ========== ショルダー加工：完了 ========== -->
+  <div id="screen-shoulder-success" class="hidden">
+    <div class="success-section">
+      <div class="success-icon">✅</div>
+      <div class="success-msg">ショルダー加工 持ち出しを記録しました！</div>
+      <div id="shoulder-success-detail" style="margin-top:12px;"></div>
+    </div>
+    <div class="menu-grid" style="margin-top:24px;">
+      <button class="menu-btn" onclick="startShoulderOut()">
+        <div class="icon">🔗</div>
+        <div class="text">続けて加工持ち出し</div>
+      </button>
+      <button class="menu-btn" onclick="showScreen('screen-naishoku-menu')">
+        <div class="icon">✂️</div>
+        <div class="text">内職メニュー</div>
+      </button>
     </div>
   </div>
 
@@ -2536,28 +2592,33 @@ function undoLastRecord() {
 let nouhinState = { name: '', product: null, color: '', quantity: 5, sourceRecord: null };
 
 function getActiveJobs() {
-  // 古い持ち出しから順にFIFOで納品を消し込む
-  const mochidashi = state.records.filter(r => r.type === '持ち出し')
+  // 持ち出し・ショルダー加工持ち出し の両方をFIFOで納品消し込み
+  // type別に独立したプールで管理
+  const allMochi = state.records.filter(r => r.type === '持ち出し' || r.type === 'ショルダー加工持ち出し')
     .slice().sort((a,b) => (a.date||'').localeCompare(b.date||''));
-  const nouhin = state.records.filter(r => r.type === '納品');
 
-  // キー（人・商品・カラー）ごとの納品合計プール
-  const pool = {};
-  nouhin.forEach(n => {
+  // type別にプール作成（通常の持ち出しと加工持ち出しは別管理）
+  const poolNormal = {};
+  const poolShoulder = {};
+  state.records.filter(r => r.type === '納品').forEach(n => {
     const key = `${n.name}|${n.product}|${n.color}`;
-    pool[key] = (pool[key] || 0) + (parseInt(n.quantity) || 0);
+    poolNormal[key] = (poolNormal[key] || 0) + (parseInt(n.quantity) || 0);
+  });
+  state.records.filter(r => r.type === 'ショルダー加工納品').forEach(n => {
+    const key = `${n.name}|${n.product}|${n.color}`;
+    poolShoulder[key] = (poolShoulder[key] || 0) + (parseInt(n.quantity) || 0);
   });
 
-  // 古い順にプール消費
-  return mochidashi.map(m => {
+  return allMochi.map(m => {
     const key = `${m.name}|${m.product}|${m.color}`;
+    const pool = m.type === 'ショルダー加工持ち出し' ? poolShoulder : poolNormal;
     const mq = parseInt(m.quantity) || 0;
     const avail = pool[key] || 0;
     const delivered = Math.min(mq, avail);
     pool[key] = avail - delivered;
     const remaining = mq - delivered;
-    return { ...m, delivered, remaining };
-  }).filter(m => m.remaining > 0); // 残数がある仕事だけ
+    return { ...m, delivered, remaining, isShoulder: m.type === 'ショルダー加工持ち出し' };
+  }).filter(m => m.remaining > 0);
 }
 
 function startNouhin() {
@@ -2588,17 +2649,20 @@ function startNouhin() {
     byName[name].forEach(job => {
       const isParts = job.color === 'なし';
       const colorText = isParts ? '' : ` ${job.color}`;
-      const unitText = isParts ? 'セット' : '枚';
+      const unitText = isParts ? (job.isShoulder ? '個' : 'セット') : (job.isShoulder ? '個' : '枚');
       const productName = job.productName || job.product;
+      const prefix = job.isShoulder ? '🔗 ' : '';
+      const jobLabel = job.isShoulder ? 'ショルダー加工持ち出し' : '持ち出し';
+      const bg = job.isShoulder ? 'background:#f0f7ff;' : 'background:white;';
       html += `<div class="alert-card" onclick='selectNouhinJob(${JSON.stringify(job).replace(/'/g, "&#39;")})'
-        style="cursor:pointer; margin-bottom:8px; padding:14px 16px; background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-        <div style="font-size:16px; font-weight:600;">${job.product}${colorText}</div>
-        <div style="font-size:13px; color:#86868b; margin-top:2px;">${productName}</div>
+        style="cursor:pointer; margin-bottom:8px; padding:14px 16px; ${bg} border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:16px; font-weight:600;">${prefix}${job.product}${colorText}</div>
+        <div style="font-size:13px; color:#86868b; margin-top:2px;">${productName}${job.isShoulder ? '（ショルダー加工）' : ''}</div>
         <div style="font-size:14px; margin-top:6px;">
-          持ち出し <strong>${job.quantity}${unitText}</strong>
+          ${jobLabel} <strong>${job.quantity}${unitText}</strong>
           → 残り <strong style="color:#ff9500;">${job.remaining}${unitText}</strong>
         </div>
-        <div style="font-size:11px; color:#aeaeb2; margin-top:4px;">${fmtDate(job.date)} 持ち出し</div>
+        <div style="font-size:11px; color:#aeaeb2; margin-top:4px;">${fmtDate(job.date)} ${jobLabel}</div>
       </div>`;
     });
     html += `</div>`;
@@ -2613,28 +2677,32 @@ function selectNouhinJob(job) {
   nouhinState.name = job.name;
   nouhinState.color = job.color;
   nouhinState.quantity = job.remaining;
+  nouhinState.isShoulder = !!job.isShoulder;
 
   const isParts = job.color === 'なし';
   const colorText = isParts ? '' : ` ${job.color}`;
-  const unitText = isParts ? 'セット' : '枚';
+  const unitText = job.isShoulder ? '個' : (isParts ? 'セット' : '枚');
   const productName = job.productName || job.product;
+  const prefix = job.isShoulder ? '🔗 ' : '';
+  const jobLabel = job.isShoulder ? 'ショルダー加工持ち出し' : '持ち出し';
 
   // 仮のproductオブジェクトを作成
   nouhinState.product = {
     code: job.product,
     name: productName,
-    isParts: isParts
+    isParts: isParts,
+    isShoulder: !!job.isShoulder
   };
 
-  document.getElementById('nouhin-product-name').textContent = `${job.product} ${productName}`;
+  document.getElementById('nouhin-product-name').textContent = `${prefix}${job.product} ${productName}`;
   document.getElementById('nouhin-qty-label').textContent =
-    `納品数量（持ち出し${job.quantity}${unitText}のうち）`;
+    `納品数量（${jobLabel}${job.quantity}${unitText}のうち）`;
   document.getElementById('nouhin-qty-input').value = nouhinState.quantity;
 
   // ジョブ情報表示
   document.getElementById('nouhin-job-info').innerHTML =
-    `<div style="font-size:13px; color:#86868b;">持ち出し情報</div>`
-    + `<div style="font-size:15px; margin-top:4px;">👤 ${job.name}さん｜${job.product}${colorText}｜${job.quantity}${unitText}</div>`
+    `<div style="font-size:13px; color:#86868b;">${jobLabel}情報</div>`
+    + `<div style="font-size:15px; margin-top:4px;">👤 ${job.name}さん｜${prefix}${job.product}${colorText}｜${job.quantity}${unitText}</div>`
     + `<div style="font-size:12px; color:#aeaeb2; margin-top:2px;">${fmtDate(job.date)}</div>`;
 
   updateNouhinBtn();
@@ -2650,9 +2718,11 @@ function changeNouhinQty(delta) {
 function updateNouhinBtn() {
   const btn = document.getElementById('nouhin-submit-btn');
   const isParts = nouhinState.product && nouhinState.product.isParts;
+  const isShoulder = nouhinState.product && nouhinState.product.isShoulder;
   const colorText = isParts ? '' : ` ${nouhinState.color}`;
-  const unitText = isParts ? 'セット' : '枚';
-  btn.textContent = `納品を記録する ✅ ${nouhinState.product.code}${colorText} ×${nouhinState.quantity}${unitText}`;
+  const unitText = isShoulder ? '個' : (isParts ? 'セット' : '枚');
+  const prefix = isShoulder ? '🔗 ' : '';
+  btn.textContent = `納品を記録する ✅ ${prefix}${nouhinState.product.code}${colorText} ×${nouhinState.quantity}${unitText}`;
   btn.className = 'submit-btn ready';
 }
 
@@ -2660,14 +2730,18 @@ function submitNouhin() {
   if (!nouhinState.product) return;
 
   const isParts = nouhinState.product.isParts;
+  const isShoulder = nouhinState.product.isShoulder;
   const colorText = isParts ? '' : `\nカラー: ${nouhinState.color}`;
-  const unitText = isParts ? 'セット' : '枚';
-  const msg = `この内容で納品を記録しますか？\n\n`
+  const unitText = isShoulder ? '個' : (isParts ? 'セット' : '枚');
+  const prefix = isShoulder ? '🔗 ' : '';
+  const recordType = isShoulder ? 'ショルダー加工納品' : '納品';
+  const msg = `この内容で${isShoulder ? 'ショルダー加工納品' : '納品'}を記録しますか？\n\n`
     + `👤 ${nouhinState.name}さん\n`
-    + `📦 ${nouhinState.product.code} ${nouhinState.product.name}${colorText}\n`
+    + `📦 ${prefix}${nouhinState.product.code} ${nouhinState.product.name}${colorText}\n`
     + `🔢 ${nouhinState.quantity}${unitText}`;
   if (!confirm(msg)) return;
 
+  const colorCode = (nouhinState.color || '').split(' ')[0];
   const record = {
     date: new Date().toISOString(),
     name: nouhinState.name,
@@ -2675,8 +2749,12 @@ function submitNouhin() {
     productName: nouhinState.product.name,
     color: nouhinState.color,
     quantity: nouhinState.quantity,
-    type: '納品'
+    type: recordType
   };
+  if (isShoulder) {
+    record.sourceSku = `${nouhinState.product.code}_${colorCode}`;
+    record.targetSku = `${nouhinState.product.code}_${colorCode}_SHO`;
+  }
   state.records.push(record);
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
   gasPost('add', { record });
@@ -2707,6 +2785,145 @@ function undoLastNouhinRecord() {
   document.getElementById('nouhin-success-detail-lines').innerHTML =
     '<div style="font-size:16px; color:#ff3b30; font-weight:600; text-align:center;">🗑️ 取り消しました</div>';
   document.getElementById('nouhin-success-undo-area').style.display = 'none';
+}
+
+// ===== ショルダー加工 =====
+// ショルダー加工対応製品コード（PRODUCTSのcode）
+const SHOULDER_PRODUCTS = ['LB', 'LB_NAME'];
+
+let shoulderState = {
+  name: '',
+  product: '',      // サイズコード例: LBL, LBM_NAME
+  productName: '',
+  color: '',        // 例: 'BL ブルー'
+  quantity: 5
+};
+
+function startShoulderOut() {
+  shoulderState = { name: '', product: '', productName: '', color: '', quantity: 5 };
+  renderShoulderScreen();
+  showScreen('screen-shoulder-out');
+}
+
+function renderShoulderScreen() {
+  // 名前ボタン
+  const nEl = document.getElementById('shoulder-name-buttons');
+  nEl.innerHTML = STAFF_NAMES.map(n => `
+    <button onclick="selectShoulderName('${n}')"
+      style="padding:10px 6px; background:${shoulderState.name === n ? '#007aff' : 'white'}; color:${shoulderState.name === n ? 'white' : 'inherit'}; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.06);">${n}</button>
+  `).join('');
+
+  // 商品表示
+  const pEl = document.getElementById('shoulder-product-display');
+  if (shoulderState.product) {
+    pEl.innerHTML = `<div style="color:#000;"><strong>${shoulderState.product}</strong> / ${shoulderState.color}</div>
+      <div style="font-size:13px; color:#86868b; margin-top:2px;">${shoulderState.productName} → ${shoulderState.product}_${shoulderState.color.split(' ')[0]}_SHO</div>`;
+  } else {
+    pEl.innerHTML = '<span style="color:#aeaeb2;">未選択</span>';
+  }
+
+  // 数量
+  document.getElementById('shoulder-qty-input').value = shoulderState.quantity;
+
+  // Submit ボタン
+  const btn = document.getElementById('shoulder-submit-btn');
+  const ready = shoulderState.name && shoulderState.product && shoulderState.color;
+  if (ready) {
+    btn.disabled = false;
+    btn.className = 'submit-btn ready';
+    btn.textContent = `🔗 ${shoulderState.product}_${shoulderState.color.split(' ')[0]} を ${shoulderState.quantity}個 加工持ち出し`;
+  } else {
+    btn.disabled = true;
+    btn.className = 'submit-btn';
+    btn.textContent = shoulderState.name ? '商品を選んでください' : '名前を選んでください';
+  }
+}
+
+function selectShoulderName(name) {
+  shoulderState.name = name;
+  renderShoulderScreen();
+}
+
+function changeShoulderQty(delta) {
+  shoulderState.quantity = Math.max(1, (parseInt(shoulderState.quantity) || 0) + delta);
+  document.getElementById('shoulder-qty-input').value = shoulderState.quantity;
+  renderShoulderScreen();
+}
+
+function setShoulderQty(v) {
+  shoulderState.quantity = Math.max(1, parseInt(v) || 1);
+  document.getElementById('shoulder-qty-input').value = shoulderState.quantity;
+  renderShoulderScreen();
+}
+
+function openShoulderProductPicker() {
+  const el = document.getElementById('shoulder-picker-list');
+  let html = '';
+  PRODUCTS.filter(p => SHOULDER_PRODUCTS.includes(p.code)).forEach(p => {
+    const sizes = p.sizes || [p.code];
+    sizes.forEach(sizeCode => {
+      const sizeLabel = (typeof SIZE_LABELS !== 'undefined' && SIZE_LABELS[sizeCode]) ? SIZE_LABELS[sizeCode] : sizeCode;
+      html += `<div style="background:white; border-radius:12px; padding:14px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:15px; font-weight:600; margin-bottom:8px;">${sizeCode} ${p.name} ${sizeLabel}</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+      (p.colors || []).forEach(c => {
+        const safeC = c.replace(/'/g,"&#39;");
+        const safeName = (SKU_NAMES[sizeCode] || p.name).replace(/'/g,"&#39;");
+        html += `<button onclick="selectShoulderProduct('${sizeCode}','${safeName}','${safeC}')"
+          style="padding:8px 12px; background:#f2f2f7; border:none; border-radius:8px; font-size:13px; cursor:pointer;">${c}</button>`;
+      });
+      html += `</div></div>`;
+    });
+  });
+  el.innerHTML = html;
+  showScreen('screen-shoulder-picker');
+}
+
+function selectShoulderProduct(sizeCode, productName, color) {
+  shoulderState.product = sizeCode;
+  shoulderState.productName = productName;
+  shoulderState.color = color;
+  renderShoulderScreen();
+  showScreen('screen-shoulder-out');
+}
+
+function submitShoulderOut() {
+  const s = shoulderState;
+  if (!s.name || !s.product || !s.color) return;
+  const colorCode = s.color.split(' ')[0];
+  const sourceSku = `${s.product}_${colorCode}`;
+  const targetSku = `${sourceSku}_SHO`;
+  const msg = `この内容で加工持ち出しを記録しますか？\n\n`
+    + `👤 ${s.name}さん\n`
+    + `🎒 ${s.product} ${s.productName}\n`
+    + `🎨 ${s.color}\n`
+    + `🔢 ${s.quantity}個\n`
+    + `📦 在庫 ${sourceSku} → 加工後 ${targetSku}`;
+  if (!confirm(msg)) return;
+
+  const record = {
+    date: new Date().toISOString(),
+    type: 'ショルダー加工持ち出し',
+    name: s.name,
+    product: s.product,
+    productName: s.productName,
+    color: s.color,
+    quantity: s.quantity,
+    sourceSku: sourceSku,
+    targetSku: targetSku
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  document.getElementById('shoulder-success-detail').innerHTML =
+    `<div style="font-size:13px; color:#86868b; margin-bottom:8px;">以下の内容で記録しました</div>`
+    + `<div style="font-size:18px; font-weight:700; margin-bottom:6px;">${s.product} / ${s.color}</div>`
+    + `<div style="font-size:13px; color:#86868b; margin-bottom:4px;">${s.productName}</div>`
+    + `<div style="font-size:15px; margin-bottom:4px;">🔢 ${s.quantity}個</div>`
+    + `<div style="font-size:13px; color:#86868b;">👤 ${s.name}さん</div>`
+    + `<div style="font-size:12px; color:#0071e3; margin-top:8px;">${sourceSku} → ${targetSku}</div>`;
+  showScreen('screen-shoulder-success');
 }
 
 // ===== 裁断・プリント・入庫 共通フロー =====
@@ -3921,14 +4138,18 @@ function refreshMomDash() {
       el1.innerHTML = '<div class="alert-card ok"><div class="alert-title">現在持ち出し中の仕事はありません</div></div>';
     } else {
       el1.innerHTML = active.map(m => {
+        const isShoulder = !!m.isShoulder;
         const isParts = m.color === 'なし';
-        const unit = isParts ? 'セット' : '枚';
+        const unit = isShoulder ? '個' : (isParts ? 'セット' : '枚');
         const colorText = isParts ? '' : ` ${m.color}`;
-        return `<div class="alert-card warning">
+        const prefix = isShoulder ? '🔗 ' : '';
+        const label = isShoulder ? 'ショルダー加工持ち出し' : '持ち出し';
+        const bg = isShoulder ? 'background:#f0f7ff;' : '';
+        return `<div class="alert-card warning" style="${bg}">
           <div style="${rowStyle}">
             <div style="flex:1; min-width:0;">
-              <div class="alert-title">${m.name}さん：${m.product}${colorText} ×${m.quantity}${unit}</div>
-              <div class="alert-detail">${fmtDate(m.date)} 持ち出し ／ 残り${m.remaining}${unit}</div>
+              <div class="alert-title">${m.name}さん：${prefix}${m.product}${colorText} ×${m.quantity}${unit}</div>
+              <div class="alert-detail">${fmtDate(m.date)} ${label} ／ 残り${m.remaining}${unit}</div>
             </div>
             ${editBtnHtml(m)}
           </div>
@@ -3937,8 +4158,8 @@ function refreshMomDash() {
     }
   }
 
-  // --- 2. 最近の納品 ---
-  const nouhin = state.records.filter(r => r.type === '納品')
+  // --- 2. 最近の納品（ショルダー加工納品も含む） ---
+  const nouhin = state.records.filter(r => r.type === '納品' || r.type === 'ショルダー加工納品')
     .slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, 10);
   const el2n = document.getElementById('mom-recent-nouhin');
   if (el2n) {
@@ -3946,14 +4167,18 @@ function refreshMomDash() {
       el2n.innerHTML = '<div class="no-data">納品記録はまだありません</div>';
     } else {
       el2n.innerHTML = nouhin.map(r => {
+        const isShoulder = r.type === 'ショルダー加工納品';
         const isParts = r.color === 'なし';
-        const unit = isParts ? 'セット' : '枚';
+        const unit = isShoulder ? '個' : (isParts ? 'セット' : '枚');
         const colorText = isParts ? '' : ` ${r.color}`;
-        return `<div class="alert-card">
+        const prefix = isShoulder ? '🔗 ' : '';
+        const label = isShoulder ? 'ショルダー加工納品' : '納品';
+        const bg = isShoulder ? 'background:#f0f7ff;' : '';
+        return `<div class="alert-card" style="${bg}">
           <div style="${rowStyle}">
             <div style="flex:1; min-width:0;">
-              <div class="alert-title">${r.name}さん：${r.product}${colorText} ×${r.quantity}${unit}</div>
-              <div class="alert-detail">${fmtDate(r.date)} 納品</div>
+              <div class="alert-title">${r.name}さん：${prefix}${r.product}${colorText} ×${r.quantity}${unit}</div>
+              <div class="alert-detail">${fmtDate(r.date)} ${label}${isShoulder && r.targetSku ? ` → ${r.targetSku}` : ''}</div>
             </div>
             ${editBtnHtml(r)}
           </div>
