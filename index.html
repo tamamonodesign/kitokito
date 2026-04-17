@@ -197,7 +197,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <p class="subtitle">生産管理システム</p>
     <div class="role-grid">
       <button class="role-btn" onclick="showDashboard('megu')">
-        <div class="role-icon">📊</div>
+        <div class="role-icon">📈</div>
         <div class="role-name">全体管理</div>
         <div class="role-desc">材料アラート・生産進捗・売上</div>
       </button>
@@ -207,7 +207,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
         <div class="role-desc">縫製発注・優先度管理</div>
       </button>
       <button class="role-btn" onclick="showDashboard('mom')">
-        <div class="role-icon">📊</div>
+        <div class="role-icon">📝</div>
         <div class="role-name">進捗管理</div>
         <div class="role-desc">持ち出し・納品・検品・入庫の確認と修正</div>
       </button>
@@ -659,8 +659,8 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <h1>📄 発注詳細</h1>
     <div id="order-detail-info" style="background:white; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"></div>
 
-    <div class="section-title" style="font-size:14px;">📌 ステータス</div>
-    <div id="order-detail-status-buttons" style="display:flex; gap:8px; margin-bottom:20px;"></div>
+    <div class="section-title" style="font-size:14px;">📊 進捗（自動計算）</div>
+    <div id="order-detail-progress" style="background:white; border-radius:12px; padding:16px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"></div>
 
     <div style="display:flex; gap:12px;">
       <button class="submit-btn" onclick="deleteOrder()" style="flex:1; background:#ff3b30; color:white;">🗑️ 削除</button>
@@ -4171,11 +4171,79 @@ function saveOrders(orders) {
   localStorage.setItem('kitokito_orders', JSON.stringify(orders));
 }
 
+// 発注ごとの進捗を自動計算（FIFO：発注作成日順）
+// 同じ商品・カラーの持ち出し/納品記録を、発注作成日以降のものから
+// 古い発注→新しい発注の順に消費する
+function computeOrderProgress(orders) {
+  const sorted = [...orders].sort((a,b) => (a.createdAt||'').localeCompare(b.createdAt||''));
+
+  // 商品+カラー キーごとに持ち出し・納品レコードを集める
+  const mochiByKey = {};
+  const nouhinByKey = {};
+  state.records.filter(r => r.type === '持ち出し').forEach(r => {
+    const k = `${r.product}|${r.color}`;
+    (mochiByKey[k] = mochiByKey[k] || []).push(r);
+  });
+  state.records.filter(r => r.type === '納品').forEach(r => {
+    const k = `${r.product}|${r.color}`;
+    (nouhinByKey[k] = nouhinByKey[k] || []).push(r);
+  });
+  Object.keys(mochiByKey).forEach(k => mochiByKey[k].sort((a,b) => (a.date||'').localeCompare(b.date||'')));
+  Object.keys(nouhinByKey).forEach(k => nouhinByKey[k].sort((a,b) => (a.date||'').localeCompare(b.date||'')));
+
+  // 各レコードの残消費可能量
+  const mochiRemain = {}, nouhinRemain = {};
+  Object.keys(mochiByKey).forEach(k => mochiRemain[k] = mochiByKey[k].map(r => parseInt(r.quantity) || 0));
+  Object.keys(nouhinByKey).forEach(k => nouhinRemain[k] = nouhinByKey[k].map(r => parseInt(r.quantity) || 0));
+
+  const progress = {};
+  sorted.forEach(o => {
+    const k = `${o.product}|${o.color}`;
+    const oQty = parseInt(o.quantity) || 0;
+    const oDate = o.createdAt || '';
+
+    // 持ち出しを消費
+    let mTaken = 0;
+    (mochiByKey[k] || []).forEach((m, i) => {
+      if ((m.date || '') < oDate) return; // 発注より前の記録は対象外
+      if (mochiRemain[k][i] <= 0) return;
+      if (mTaken >= oQty) return;
+      const take = Math.min(mochiRemain[k][i], oQty - mTaken);
+      mochiRemain[k][i] -= take;
+      mTaken += take;
+    });
+
+    // 納品を消費（この発注で持ち出した分まで）
+    const nMax = Math.min(oQty, mTaken);
+    let nTaken = 0;
+    (nouhinByKey[k] || []).forEach((n, i) => {
+      if ((n.date || '') < oDate) return;
+      if (nouhinRemain[k][i] <= 0) return;
+      if (nTaken >= nMax) return;
+      const take = Math.min(nouhinRemain[k][i], nMax - nTaken);
+      nouhinRemain[k][i] -= take;
+      nTaken += take;
+    });
+
+    progress[o.id] = {
+      orderQty: oQty,
+      nouhin: nTaken,
+      sewing: mTaken - nTaken,
+      mochidashi: mTaken,
+      remaining: oQty - mTaken,
+      autoStatus: nTaken >= oQty ? 'done' : (mTaken > 0 ? 'doing' : 'todo')
+    };
+  });
+  return progress;
+}
+
 function refreshOrderList() {
   const orders = loadOrders();
+  const progress = computeOrderProgress(orders);
   const byBucket = { urgent: [], normal: [], low: [], done: [] };
   orders.forEach(o => {
-    if (o.status === 'done') byBucket.done.push(o);
+    const p = progress[o.id];
+    if (p && p.autoStatus === 'done') byBucket.done.push(o);
     else byBucket[o.priority || 'normal'].push(o);
   });
   // 納期昇順、なしは後ろ
@@ -4187,6 +4255,7 @@ function refreshOrderList() {
   };
   Object.keys(byBucket).forEach(k => byBucket[k].sort(dueSort));
 
+  const isPartsColor = (c) => c === 'なし';
   const render = (list, elId, emptyMsg) => {
     const el = document.getElementById(elId);
     if (!el) return;
@@ -4195,23 +4264,43 @@ function refreshOrderList() {
       return;
     }
     el.innerHTML = list.map(o => {
-      const status = ORDER_STATUSES.find(s => s.id === o.status) || ORDER_STATUSES[0];
+      const p = progress[o.id] || { orderQty: o.quantity, nouhin:0, sewing:0, remaining:o.quantity };
+      const unit = isPartsColor(o.color) ? 'セット' : '枚';
+      const colorText = o.color && o.color !== 'なし' ? ` ${o.color}` : '';
       const due = o.dueDate ? `📅 ${o.dueDate}` : '';
-      const colorText = o.color ? ` ${o.color}` : '';
+      const isDone = p.autoStatus === 'done';
+
+      // 進捗バー（納品=緑、縫製中=橙、残=灰）
+      const total = p.orderQty || 1;
+      const nPct = (p.nouhin / total) * 100;
+      const sPct = (p.sewing / total) * 100;
+      const rPct = Math.max(0, 100 - nPct - sPct);
+      const bar = `
+        <div style="display:flex; height:8px; border-radius:4px; overflow:hidden; background:#e5e5ea; margin-top:6px;">
+          ${nPct > 0 ? `<div style="width:${nPct}%; background:#34c759;"></div>` : ''}
+          ${sPct > 0 ? `<div style="width:${sPct}%; background:#ff9500;"></div>` : ''}
+          ${rPct > 0 ? `<div style="width:${rPct}%; background:#e5e5ea;"></div>` : ''}
+        </div>`;
+
+      const remainingBadge = isDone
+        ? `<div style="background:#34c759; color:white; padding:6px 12px; border-radius:20px; font-size:14px; font-weight:700;">✅ 完了</div>`
+        : `<div style="background:${p.remaining > 0 ? '#ff3b30' : '#ff9500'}; color:white; padding:6px 12px; border-radius:20px; font-size:14px; font-weight:700;">残 ${p.remaining}${unit}</div>`;
+
       return `<div class="alert-card" onclick='openOrderDetail("${o.id}")'
-        style="cursor:pointer; margin-bottom:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:16px; font-weight:600;">${o.product}${colorText} ×${o.quantity}</div>
-            <div style="font-size:12px; color:#86868b; margin-top:2px;">${o.productName || ''}</div>
-            <div style="font-size:12px; color:#86868b; margin-top:4px;">
-              <span style="color:${status.color}; font-weight:600;">● ${status.label}</span>
-              ${due ? ` ・ ${due}` : ''}
-              ・ 👤 ${o.requester}
-            </div>
-            ${o.memo ? `<div style="font-size:12px; color:#86868b; margin-top:4px; padding:6px 8px; background:#f5f5f7; border-radius:6px;">📝 ${o.memo}</div>` : ''}
-          </div>
+        style="cursor:pointer; margin-bottom:10px; ${isDone ? 'opacity:0.7;' : ''}">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+          <div style="font-size:16px; font-weight:600; flex:1; min-width:0;">${o.product}${colorText} ×${o.quantity}${unit}</div>
+          ${remainingBadge}
         </div>
+        ${o.productName ? `<div style="font-size:12px; color:#86868b;">${o.productName}</div>` : ''}
+        ${isDone ? '' : bar}
+        <div style="font-size:12px; color:#86868b; margin-top:6px;">
+          ✅ 納品 ${p.nouhin}  ／  🧵 縫製中 ${p.sewing}  ／  📋 発注 ${p.orderQty}
+        </div>
+        <div style="font-size:11px; color:#aeaeb2; margin-top:4px;">
+          ${due ? due + ' ・ ' : ''}👤 ${o.requester}
+        </div>
+        ${o.memo ? `<div style="font-size:12px; color:#86868b; margin-top:6px; padding:6px 8px; background:#f5f5f7; border-radius:6px;">📝 ${o.memo}</div>` : ''}
       </div>`;
     }).join('');
   };
@@ -4355,34 +4444,61 @@ function openOrderDetail(id) {
 
   const prio = ORDER_PRIORITIES.find(p => p.id === o.priority) || ORDER_PRIORITIES[1];
   const due = o.dueDate ? `📅 納期：${o.dueDate}` : '📅 納期：未設定';
+  const unit = (o.color === 'なし') ? 'セット' : '枚';
   document.getElementById('order-detail-info').innerHTML =
     `<div style="font-size:13px; color:#86868b; margin-bottom:4px;">発注内容</div>`
-    + `<div style="font-size:18px; font-weight:700;">${o.product}${o.color ? ' / ' + o.color : ''}</div>`
+    + `<div style="font-size:18px; font-weight:700;">${o.product}${o.color && o.color !== 'なし' ? ' / ' + o.color : ''}</div>`
     + (o.productName ? `<div style="font-size:13px; color:#86868b; margin-top:2px;">${o.productName}</div>` : '')
-    + `<div style="font-size:15px; margin-top:8px;">🔢 ${o.quantity}</div>`
+    + `<div style="font-size:15px; margin-top:8px;">🔢 ${o.quantity}${unit}</div>`
     + `<div style="font-size:13px; color:${prio.color}; font-weight:600; margin-top:4px;">${prio.label}</div>`
     + `<div style="font-size:13px; color:#86868b; margin-top:4px;">${due}</div>`
     + `<div style="font-size:13px; color:#86868b; margin-top:2px;">👤 発注者：${o.requester}</div>`
     + (o.memo ? `<div style="font-size:13px; margin-top:8px; padding:8px; background:#f5f5f7; border-radius:6px;">📝 ${o.memo}</div>` : '')
     + `<div style="font-size:11px; color:#aeaeb2; margin-top:6px;">作成：${fmtDate(o.createdAt)}</div>`;
 
-  document.getElementById('order-detail-status-buttons').innerHTML =
-    ORDER_STATUSES.map(s => `
-      <button onclick="setOrderStatus('${s.id}')"
-        style="flex:1; padding:12px; background:${o.status === s.id ? s.color : 'white'}; color:${o.status === s.id ? 'white' : s.color}; border:2px solid ${s.color}; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">${s.label}</button>
-    `).join('');
+  // 進捗表示
+  const progress = computeOrderProgress(orders);
+  const p = progress[o.id] || { orderQty: o.quantity, nouhin:0, sewing:0, remaining:o.quantity, autoStatus:'todo' };
+  const statusText = p.autoStatus === 'done' ? '✅ 完了'
+    : p.autoStatus === 'doing' ? '🧵 進行中'
+    : '🕓 未着手';
+  const statusColor = p.autoStatus === 'done' ? '#34c759'
+    : p.autoStatus === 'doing' ? '#ff9500'
+    : '#86868b';
+
+  const total = p.orderQty || 1;
+  const nPct = (p.nouhin / total) * 100;
+  const sPct = (p.sewing / total) * 100;
+  const rPct = Math.max(0, 100 - nPct - sPct);
+
+  const remainingBadge = p.autoStatus === 'done'
+    ? `<div style="background:#34c759; color:white; padding:10px 20px; border-radius:24px; font-size:18px; font-weight:700; display:inline-block;">✅ 完了</div>`
+    : `<div style="background:${p.remaining > 0 ? '#ff3b30' : '#ff9500'}; color:white; padding:10px 20px; border-radius:24px; font-size:22px; font-weight:700; display:inline-block;">残 ${p.remaining}${unit}</div>`;
+
+  document.getElementById('order-detail-progress').innerHTML =
+    `<div style="text-align:center; margin-bottom:16px;">${remainingBadge}</div>`
+    + `<div style="display:flex; height:12px; border-radius:6px; overflow:hidden; background:#e5e5ea; margin-bottom:12px;">
+        ${nPct > 0 ? `<div style="width:${nPct}%; background:#34c759;"></div>` : ''}
+        ${sPct > 0 ? `<div style="width:${sPct}%; background:#ff9500;"></div>` : ''}
+        ${rPct > 0 ? `<div style="width:${rPct}%; background:#e5e5ea;"></div>` : ''}
+      </div>`
+    + `<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; text-align:center;">
+        <div style="padding:10px; background:#f0fff4; border-radius:8px;">
+          <div style="font-size:11px; color:#86868b;">✅ 納品</div>
+          <div style="font-size:20px; font-weight:700; color:#34c759;">${p.nouhin}</div>
+        </div>
+        <div style="padding:10px; background:#fff8f0; border-radius:8px;">
+          <div style="font-size:11px; color:#86868b;">🧵 縫製中</div>
+          <div style="font-size:20px; font-weight:700; color:#ff9500;">${p.sewing}</div>
+        </div>
+        <div style="padding:10px; background:#f5f5f7; border-radius:8px;">
+          <div style="font-size:11px; color:#86868b;">📋 発注</div>
+          <div style="font-size:20px; font-weight:700;">${p.orderQty}</div>
+        </div>
+      </div>`
+    + `<div style="text-align:center; margin-top:12px; font-size:13px; color:${statusColor}; font-weight:600;">${statusText}</div>`;
 
   showScreen('screen-order-detail');
-}
-
-function setOrderStatus(statusId) {
-  const orders = loadOrders();
-  const idx = orders.findIndex(o => o.id === orderState.id);
-  if (idx < 0) return;
-  orders[idx].status = statusId;
-  saveOrders(orders);
-  orderState.status = statusId;
-  openOrderDetail(orderState.id); // refresh
 }
 
 function editOrder() {
