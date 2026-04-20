@@ -286,6 +286,11 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <div class="color-grid" id="tana-product-buttons"></div>
     </div>
 
+    <div class="form-section" id="tana-size-section" style="display:none;">
+      <h3>サイズを選んでください</h3>
+      <div class="color-grid" id="tana-size-buttons"></div>
+    </div>
+
     <div class="form-section" id="tana-color-section" style="display:none;">
       <h3>カラーを選んでください</h3>
       <div class="color-grid" id="tana-color-buttons"></div>
@@ -293,6 +298,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
     <div class="form-section" id="tana-qty-section" style="display:none;">
       <h3 id="tana-qty-label">在庫数</h3>
+      <div id="tana-current-info" style="font-size:13px; color:#86868b; margin-bottom:10px;"></div>
       <div class="bgrade-section">
         <div class="bgrade-row">
           <span class="bgrade-label">OK品</span>
@@ -5336,10 +5342,10 @@ function refreshSettingsInfo() {
 }
 
 // ===== 棚卸し =====
-let tanaState = { product: null, color: '', quantityOk: 0, quantityBGrade: 0 };
+let tanaState = { product: null, sizeCode: '', color: '', quantityOk: 0, quantityBGrade: 0 };
 
 function initTanaoroshi() {
-  tanaState = { product: null, color: '', quantityOk: 0, quantityBGrade: 0 };
+  tanaState = { product: null, sizeCode: '', color: '', quantityOk: 0, quantityBGrade: 0 };
   const grid = document.getElementById('tana-product-buttons');
   grid.innerHTML = '';
   PRODUCTS.forEach(p => {
@@ -5349,6 +5355,7 @@ function initTanaoroshi() {
     btn.onclick = () => selectTanaProduct(p);
     grid.appendChild(btn);
   });
+  document.getElementById('tana-size-section').style.display = 'none';
   document.getElementById('tana-color-section').style.display = 'none';
   document.getElementById('tana-qty-section').style.display = 'none';
   updateTanaBtn();
@@ -5357,6 +5364,7 @@ function initTanaoroshi() {
 
 function selectTanaProduct(product) {
   tanaState.product = product;
+  tanaState.sizeCode = '';
   tanaState.color = '';
   tanaState.quantityOk = 0;
   tanaState.quantityBGrade = 0;
@@ -5364,8 +5372,49 @@ function selectTanaProduct(product) {
   document.querySelectorAll('#tana-product-buttons .color-btn').forEach(b => b.classList.remove('selected'));
   event.target.classList.add('selected');
 
-  // カラーボタン生成
+  const sizeSection = document.getElementById('tana-size-section');
   const colorSection = document.getElementById('tana-color-section');
+  document.getElementById('tana-qty-section').style.display = 'none';
+
+  if (product.sizes && product.sizes.length > 0) {
+    // サイズ選択ステップを出す
+    const sizeGrid = document.getElementById('tana-size-buttons');
+    sizeGrid.innerHTML = '';
+    product.sizes.forEach(sizeCode => {
+      const btn = document.createElement('button');
+      btn.className = 'color-btn';
+      const label = SIZE_LABELS[sizeCode] || sizeCode;
+      btn.innerHTML = `<div style="font-weight:600;">${sizeCode}</div><div style="font-size:11px; color:#86868b;">${label}</div>`;
+      btn.onclick = () => selectTanaSize(sizeCode, btn);
+      sizeGrid.appendChild(btn);
+    });
+    sizeSection.style.display = '';
+    colorSection.style.display = 'none';
+  } else {
+    // サイズなし商品 → そのままカラー選択へ
+    sizeSection.style.display = 'none';
+    buildTanaColorButtons(product);
+    colorSection.style.display = '';
+  }
+  updateTanaBtn();
+}
+
+function selectTanaSize(sizeCode, el) {
+  tanaState.sizeCode = sizeCode;
+  tanaState.color = '';
+  tanaState.quantityOk = 0;
+  tanaState.quantityBGrade = 0;
+
+  document.querySelectorAll('#tana-size-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+
+  buildTanaColorButtons(tanaState.product);
+  document.getElementById('tana-color-section').style.display = '';
+  document.getElementById('tana-qty-section').style.display = 'none';
+  updateTanaBtn();
+}
+
+function buildTanaColorButtons(product) {
   const colorGrid = document.getElementById('tana-color-buttons');
   colorGrid.innerHTML = '';
   product.colors.forEach(c => {
@@ -5375,9 +5424,23 @@ function selectTanaProduct(product) {
     btn.onclick = () => selectTanaColor(c, btn);
     colorGrid.appendChild(btn);
   });
-  colorSection.style.display = '';
-  document.getElementById('tana-qty-section').style.display = 'none';
-  updateTanaBtn();
+}
+
+function tanaEffectiveSku() {
+  return tanaState.sizeCode || (tanaState.product && tanaState.product.code) || '';
+}
+
+function findLatestTanaRecord(sku, color) {
+  const colorCode = (color || '').split(' ')[0];
+  let latest = null;
+  state.records.forEach(r => {
+    if (r.type !== '棚卸し') return;
+    const rColor = (r.color || '').split(' ')[0];
+    if (r.product === sku && rColor === colorCode) {
+      if (!latest || r.date > latest.date) latest = r;
+    }
+  });
+  return latest;
 }
 
 function selectTanaColor(color, el) {
@@ -5390,7 +5453,18 @@ function selectTanaColor(color, el) {
 
   document.getElementById('tana-ok-input').value = '0';
   document.getElementById('tana-bgrade-input').value = '0';
-  document.getElementById('tana-qty-label').textContent = `${tanaState.product.code} / ${color} の在庫数`;
+  const sku = tanaEffectiveSku();
+  document.getElementById('tana-qty-label').textContent = `${sku} / ${color} の在庫数`;
+
+  // 現在登録されている棚卸し数を表示
+  const info = document.getElementById('tana-current-info');
+  const latest = findLatestTanaRecord(sku, color);
+  if (latest) {
+    info.textContent = `現在の棚卸し: OK:${latest.quantity||0} B品:${latest.bGrade||0} / ${fmtDate(latest.date)}`;
+  } else {
+    info.textContent = '（まだ棚卸し記録はありません）';
+  }
+
   document.getElementById('tana-qty-section').style.display = '';
   updateTanaBtn();
 }
@@ -5407,30 +5481,35 @@ function updateTanaBtn() {
   if (!tanaState.product) {
     btn.textContent = '商品を選んでください';
     btn.className = 'submit-btn not-ready';
+  } else if (tanaState.product.sizes && tanaState.product.sizes.length > 0 && !tanaState.sizeCode) {
+    btn.textContent = 'サイズを選んでください';
+    btn.className = 'submit-btn not-ready';
   } else if (!tanaState.color) {
     btn.textContent = 'カラーを選んでください';
     btn.className = 'submit-btn not-ready';
   } else {
     const ok = parseInt(document.getElementById('tana-ok-input').value) || 0;
     const b = parseInt(document.getElementById('tana-bgrade-input').value) || 0;
-    btn.textContent = `棚卸しを登録する ✅ ${tanaState.product.code} ${tanaState.color} OK:${ok} B品:${b}`;
+    btn.textContent = `棚卸しを登録する ✅ ${tanaEffectiveSku()} ${tanaState.color} OK:${ok} B品:${b}`;
     btn.className = 'submit-btn ready';
   }
 }
 
 function submitTanaoroshi() {
   if (!tanaState.product || !tanaState.color) return;
+  if (tanaState.product.sizes && tanaState.product.sizes.length > 0 && !tanaState.sizeCode) return;
   const qtyOk = parseInt(document.getElementById('tana-ok-input').value) || 0;
   const qtyB = parseInt(document.getElementById('tana-bgrade-input').value) || 0;
   if (qtyOk === 0 && qtyB === 0) {
     if (!confirm('OK品・B品ともに0個で登録しますか？')) return;
   }
 
+  const sku = tanaEffectiveSku();
   const record = {
     date: new Date().toISOString(),
     type: '棚卸し',
-    product: tanaState.product.code,
-    productName: tanaState.product.name,
+    product: sku,
+    productName: SKU_NAMES[sku] || tanaState.product.name,
     color: tanaState.color,
     quantity: qtyOk,
     bGrade: qtyB
@@ -5439,12 +5518,13 @@ function submitTanaoroshi() {
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
   gasPost('add', { record });
 
-  // 次の入力のためリセット
+  // 次の入力のためリセット（サイズ・商品はそのまま、カラーだけ戻す）
   tanaState.color = '';
   tanaState.quantityOk = 0;
   tanaState.quantityBGrade = 0;
   document.querySelectorAll('#tana-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('tana-qty-section').style.display = 'none';
+  document.getElementById('tana-current-info').textContent = '';
   updateTanaBtn();
   refreshTanaList();
 }
