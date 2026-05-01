@@ -296,6 +296,15 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <div class="color-grid" id="tana-color-buttons"></div>
     </div>
 
+    <div class="form-section" id="tana-shoulder-section" style="display:none;">
+      <h3>ショルダー版？</h3>
+      <p style="font-size:12px; color:#86868b; margin:-4px 0 8px;">レッスンバッグ・イラストバッグはショルダー加工版（_SHO）の在庫もここで登録できます</p>
+      <div style="display:flex; gap:8px;">
+        <button class="color-btn" id="tana-shoulder-no" onclick="setTanaShoulder(false)">通常版</button>
+        <button class="color-btn" id="tana-shoulder-yes" onclick="setTanaShoulder(true)">🔗 ショルダー版（_SHO）</button>
+      </div>
+    </div>
+
     <div class="form-section" id="tana-qty-section" style="display:none;">
       <h3 id="tana-qty-label">在庫数</h3>
       <div id="tana-current-info" style="font-size:13px; color:#86868b; margin-bottom:10px;"></div>
@@ -629,6 +638,8 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <h1>📊 進捗管理</h1>
     <p class="subtitle">記録の確認と修正（タップで詳細）</p>
 
+    <button class="submit-btn ready" onclick="showScreen('screen-record-list')" style="margin:8px 0 16px; padding:12px; font-size:15px;">📋 記録一覧（過去の全記録を見る・修正する）</button>
+
     <div class="section-title">🧵 持ち出し中の仕事</div>
     <div id="mom-active-jobs"></div>
 
@@ -640,6 +651,33 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
     <div class="section-title" style="margin-top:24px">📥 最近の入庫</div>
     <div id="mom-recent-stock"></div>
+  </div>
+
+  <!-- ========== 記録一覧 ========== -->
+  <div id="screen-record-list" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-dash-mom')">← もどる</button>
+    <h1>📋 記録一覧</h1>
+    <p class="subtitle">全ての記録を確認・修正・削除できます</p>
+
+    <div style="background:white; border-radius:12px; padding:14px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+      <div style="font-size:13px; font-weight:600; color:#86868b; margin-bottom:6px;">種別</div>
+      <div id="rl-filter-type" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;"></div>
+
+      <div style="font-size:13px; font-weight:600; color:#86868b; margin-bottom:6px;">期間</div>
+      <div id="rl-filter-period" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;"></div>
+
+      <div id="rl-custom-period" style="display:none; gap:8px; margin-bottom:12px; align-items:center;">
+        <input type="date" id="rl-date-from" onchange="refreshRecordList()" style="flex:1; padding:8px; border:1px solid #d2d2d7; border-radius:8px; font-size:13px;">
+        <span style="color:#86868b; font-size:13px;">〜</span>
+        <input type="date" id="rl-date-to" onchange="refreshRecordList()" style="flex:1; padding:8px; border:1px solid #d2d2d7; border-radius:8px; font-size:13px;">
+      </div>
+
+      <div style="font-size:13px; font-weight:600; color:#86868b; margin-bottom:6px;">商品/SKUで絞り込み（任意）</div>
+      <input type="text" id="rl-filter-product" placeholder="例：LBL, BL, IBSS_KI など" oninput="refreshRecordList()" style="width:100%; padding:10px; border:1px solid #d2d2d7; border-radius:8px; font-size:14px; box-sizing:border-box;">
+    </div>
+
+    <div id="rl-summary" style="font-size:13px; color:#86868b; margin-bottom:8px;"></div>
+    <div id="rl-list"></div>
   </div>
 
   <!-- ========== 製造管理（縫製発注）========== -->
@@ -731,7 +769,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
   <!-- ========== 記録修正画面 ========== -->
   <div id="screen-record-edit" class="hidden">
-    <button class="back-btn" onclick="showScreen('screen-dash-mom')">← もどる</button>
+    <button class="back-btn" onclick="showScreen(editState.returnTo || 'screen-dash-mom')">← もどる</button>
     <h1>✏️ 記録を修正</h1>
     <p class="subtitle" id="edit-record-type"></p>
 
@@ -2258,7 +2296,11 @@ const PRODUCTS = [
     colors: ['RD レッド', 'MU マスタード', 'BE ベージュ', 'BR カーキブラウン', 'BL ブルー', 'NA ネイビー'],
     parts: ['表地 ×2', 'リボン ×1', 'スナップボタン ×2'] },
   { code: 'FB', name: 'フリルバッグ', sizes: ['FBM', 'FBOL'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/3906b6e6b1c21bca777b164683a42a4b.jpg',
-    colors: ['AP メローアプリコット', 'BL ラムネブルー', 'LE レモンクリーム'],
+    colors: ['AP メローアプリコット', 'BL ラムネブルー', 'LE レモンクリーム', 'BK ブラック', 'GY グレー', 'BE ベージュ'],
+    colorsBySize: {
+      'FBM':  ['AP メローアプリコット', 'BL ラムネブルー', 'LE レモンクリーム'],
+      'FBOL': ['BK ブラック', 'GY グレー', 'BE ベージュ'],
+    },
     parts: ['表地 ×1', '裏地 ×1', 'ポケット ×1', '持ち手 ×2', 'ひも ×4', 'タグ ×1', 'お名前タグ ×1'] },
   { code: 'OMM', name: 'おむつ入れ', img: 'https://tshop.r10s.jp/hnds/cabinet/om/imgrc0121041581.jpg',
     colors: ['BK ブラック', 'GY グレー'],
@@ -2409,6 +2451,14 @@ const SIZE_LABELS = {
   'LBL_NAME': 'L（ラージ）', 'LBM_NAME': 'M（ミディアム）', 'LBS_NAME': 'S（スモール）', 'LBSS_NAME': 'SS（ミニ）',
 };
 
+// サイズ別カラー取得：colorsBySize[sizeCode] があればそれを優先、なければ product.colors
+function effectiveColorsForSize(product, sizeCode) {
+  if (product && product.colorsBySize && sizeCode && product.colorsBySize[sizeCode]) {
+    return product.colorsBySize[sizeCode];
+  }
+  return (product && product.colors) ? product.colors : [];
+}
+
 function selectProduct(product) {
   // サイズ展開がある商品はサイズ選択画面へ
   if (product.sizes && product.sizes.length > 0) {
@@ -2428,7 +2478,8 @@ function selectProduct(product) {
           code: sizeCode,
           name: product.name + '（' + (SIZE_LABELS[sizeCode] || sizeCode) + '）',
           skuGroup: sizeCode,
-          originalCode: product.code
+          originalCode: product.code,
+          colors: effectiveColorsForSize(product, sizeCode)
         };
         openInputScreen(sizedProduct);
       };
@@ -2872,7 +2923,7 @@ function openShoulderProductPicker() {
       html += `<div style="background:white; border-radius:12px; padding:14px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
         <div style="font-size:15px; font-weight:600; margin-bottom:8px;">${sizeCode} ${p.name} ${sizeLabel}</div>
         <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
-      (p.colors || []).forEach(c => {
+      effectiveColorsForSize(p, sizeCode).forEach(c => {
         const safeC = c.replace(/'/g,"&#39;");
         const safeName = (SKU_NAMES[sizeCode] || p.name).replace(/'/g,"&#39;");
         html += `<button onclick="selectShoulderProduct('${sizeCode}','${safeName}','${safeC}')"
@@ -3163,7 +3214,7 @@ function selectWorkProduct(type, product, btn) {
       sbtn.onclick = () => {
         document.querySelectorAll(`#${type}-size-buttons .color-btn`).forEach(b => b.classList.remove('selected'));
         sbtn.classList.add('selected');
-        const sizedProduct = { ...product, code: sizeCode, name: product.name + '（' + (SIZE_LABELS[sizeCode] || SAIDAN_SIZE_LABELS[sizeCode] || sizeCode) + '）', originalCode: product.code };
+        const sizedProduct = { ...product, code: sizeCode, name: product.name + '（' + (SIZE_LABELS[sizeCode] || SAIDAN_SIZE_LABELS[sizeCode] || sizeCode) + '）', originalCode: product.code, colors: effectiveColorsForSize(product, sizeCode) };
         selectWorkProductColors(type, sizedProduct);
       };
       sizeGrid.appendChild(sbtn);
@@ -4244,7 +4295,7 @@ function refreshMomDash() {
 }
 
 // ===== 記録修正フロー =====
-let editState = { original: null, edited: null };
+let editState = { original: null, edited: null, returnTo: 'screen-dash-mom' };
 
 // 記録の一意キー（date+type+product+color+name）で state.records から検索
 function findRecordIndex(rec) {
@@ -4260,18 +4311,22 @@ function findRecordIndex(rec) {
 function openEditRecord(record) {
   editState.original = JSON.parse(JSON.stringify(record));
   editState.edited = JSON.parse(JSON.stringify(record));
+  // どの画面から開いたかを記憶
+  const active = document.querySelector('.container > div:not(.hidden)');
+  editState.returnTo = (active && active.id) ? active.id : 'screen-dash-mom';
 
   const isParts = record.color === 'なし';
   const unit = isParts ? 'セット' : '枚';
   const colorText = isParts ? '' : ` ${record.color}`;
 
   document.getElementById('edit-record-type').textContent = `種別：${record.type}`;
+  const productLabel = record.product || record.partCode || record.category || '';
   document.getElementById('edit-record-info').innerHTML =
     `<div style="font-size:13px; color:#86868b; margin-bottom:4px;">修正する記録</div>`
-    + `<div style="font-size:16px; font-weight:600;">${record.product}${colorText}</div>`
+    + `<div style="font-size:16px; font-weight:600;">${productLabel}${colorText}</div>`
     + (record.productName ? `<div style="font-size:13px; color:#86868b; margin-top:2px;">${record.productName}</div>` : '')
     + (record.name ? `<div style="font-size:14px; margin-top:6px;">👤 ${record.name}さん</div>` : '')
-    + `<div style="font-size:12px; color:#aeaeb2; margin-top:4px;">${fmtDate(record.date)}</div>`;
+    + `<div style="font-size:12px; color:#aeaeb2; margin-top:4px;">登録日時: ${fmtDate(record.date)}</div>`;
 
   // 種別ごとに編集可能フィールドを構築
   let fieldsHtml = '';
@@ -4287,24 +4342,48 @@ function openEditRecord(record) {
       </div>
     </div>`;
 
-  if (record.type === '持ち出し' || record.type === '納品') {
-    fieldsHtml = qtyRow(`${record.type}数量（${unit}）`, 'quantity', record.quantity || 0, 1);
+  // 日付編集行（全種別共通）
+  const dateOnly = (record.date || '').slice(0, 10);
+  const dateRow = `
+    <div style="background:white; border-radius:12px; padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+      <div style="font-size:13px; color:#86868b; margin-bottom:6px;">📅 記録日（修正可）</div>
+      <input type="date" id="edit-input-date" value="${dateOnly}" onchange="setEditDate(this.value)" style="width:100%; padding:10px; border:1px solid #e5e5ea; border-radius:10px; font-size:16px; box-sizing:border-box;">
+      <div style="font-size:11px; color:#aeaeb2; margin-top:6px;">※ 棚卸しとの日付ずれ修正に使えます</div>
+    </div>`;
+
+  let qtyFieldsHtml = '';
+  if (record.type === '持ち出し' || record.type === '納品' || record.type === 'ショルダー加工持ち出し' || record.type === 'ショルダー加工納品') {
+    const u = (record.type.includes('ショルダー')) ? '個' : unit;
+    qtyFieldsHtml = qtyRow(`${record.type}数量（${u}）`, 'quantity', record.quantity || 0, 1);
   } else if (record.type === '検品完了') {
-    fieldsHtml =
+    qtyFieldsHtml =
       qtyRow(`✅ OK数（${unit}）`, 'quantityOk', record.quantityOk || 0)
       + qtyRow(`⚠️ B品数（${unit}）`, 'quantityBGrade', record.quantityBGrade || 0)
       + qtyRow(`❌ 不可数（${unit}）`, 'quantityRejected', record.quantityRejected || 0);
   } else if (record.type === '入庫') {
-    fieldsHtml =
+    qtyFieldsHtml =
+      qtyRow(`✅ OK数（${unit}）`, 'quantity', record.quantity || 0)
+      + qtyRow(`⚠️ B品数（${unit}）`, 'bGrade', record.bGrade || 0);
+  } else if (record.type === '棚卸し' || record.type === 'パーツ棚卸し') {
+    qtyFieldsHtml =
       qtyRow(`✅ OK数（${unit}）`, 'quantity', record.quantity || 0)
       + qtyRow(`⚠️ B品数（${unit}）`, 'bGrade', record.bGrade || 0);
   } else {
     // その他（裁断・プリント・材料発注・材料入荷など）は数量のみ
-    fieldsHtml = qtyRow('数量', 'quantity', record.quantity || 0);
+    qtyFieldsHtml = qtyRow('数量', 'quantity', record.quantity || 0);
   }
 
+  fieldsHtml = dateRow + qtyFieldsHtml;
   document.getElementById('edit-fields').innerHTML = fieldsHtml;
   showScreen('screen-record-edit');
+}
+
+function setEditDate(val) {
+  if (!val) return;
+  // 元の時刻部分を保持して日付だけ差し替え（タイムスタンプ精度維持）
+  const orig = editState.edited.date || new Date().toISOString();
+  const timePart = orig.includes('T') ? orig.slice(10) : 'T00:00:00.000Z';
+  editState.edited.date = val + timePart;
 }
 
 function changeEditQty(key, delta, min) {
@@ -4339,10 +4418,13 @@ function saveEditRecord() {
     gasPost('add', { record: editState.edited });
   });
 
-  editState = { original: null, edited: null };
+  const back = editState.returnTo || 'screen-dash-mom';
+  editState = { original: null, edited: null, returnTo: 'screen-dash-mom' };
   alert('修正しました');
-  showScreen('screen-dash-mom');
-  refreshMomDash();
+  showScreen(back);
+  if (back === 'screen-dash-mom') refreshMomDash();
+  if (back === 'screen-record-list') refreshRecordList();
+  if (back === 'screen-tanaoroshi') { refreshTanaList(); }
 }
 
 function deleteEditRecord() {
@@ -4359,10 +4441,182 @@ function deleteEditRecord() {
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
   gasPost('delete', { record: oldRec });
 
-  editState = { original: null, edited: null };
+  const back = editState.returnTo || 'screen-dash-mom';
+  editState = { original: null, edited: null, returnTo: 'screen-dash-mom' };
   alert('削除しました');
-  showScreen('screen-dash-mom');
-  refreshMomDash();
+  showScreen(back);
+  if (back === 'screen-dash-mom') refreshMomDash();
+  if (back === 'screen-record-list') refreshRecordList();
+  if (back === 'screen-tanaoroshi') { refreshTanaList(); }
+}
+
+// ===== 記録一覧 =====
+const RECORD_LIST_TYPES = [
+  { id: 'all',      label: 'すべて',     types: null },
+  { id: 'mochi',    label: '持ち出し',   types: ['持ち出し', 'ショルダー加工持ち出し'] },
+  { id: 'nouhin',   label: '納品',       types: ['納品', 'ショルダー加工納品'] },
+  { id: 'kenpin',   label: '検品',       types: ['検品完了'] },
+  { id: 'nyuko',    label: '入庫',       types: ['入庫'] },
+  { id: 'tana',     label: '棚卸し',     types: ['棚卸し', 'パーツ棚卸し'] },
+  { id: 'saidan',   label: '裁断',       types: ['裁断', '裁断完了'] },
+  { id: 'print',    label: 'プリント',   types: ['プリント', 'プリント完了'] },
+  { id: 'mat',      label: '材料',       types: ['材料発注', '材料入荷'] },
+];
+const RECORD_LIST_PERIODS = [
+  { id: 'today',  label: '今日' },
+  { id: 'week',   label: '今週' },
+  { id: 'month',  label: '今月' },
+  { id: '3month', label: '3ヶ月' },
+  { id: 'all',    label: '全期間' },
+  { id: 'custom', label: 'カスタム' },
+];
+let recordListState = { typeFilter: 'all', periodFilter: 'month', productFilter: '' };
+
+function initRecordList() {
+  const tEl = document.getElementById('rl-filter-type');
+  tEl.innerHTML = RECORD_LIST_TYPES.map(t =>
+    `<button class="color-btn ${recordListState.typeFilter === t.id ? 'selected' : ''}" data-rl-type="${t.id}" onclick="setRecordListType('${t.id}')">${t.label}</button>`
+  ).join('');
+
+  const pEl = document.getElementById('rl-filter-period');
+  pEl.innerHTML = RECORD_LIST_PERIODS.map(p =>
+    `<button class="color-btn ${recordListState.periodFilter === p.id ? 'selected' : ''}" data-rl-period="${p.id}" onclick="setRecordListPeriod('${p.id}')">${p.label}</button>`
+  ).join('');
+
+  document.getElementById('rl-custom-period').style.display = recordListState.periodFilter === 'custom' ? 'flex' : 'none';
+  refreshRecordList();
+}
+
+function setRecordListType(id) {
+  recordListState.typeFilter = id;
+  document.querySelectorAll('[data-rl-type]').forEach(b => b.classList.toggle('selected', b.dataset.rlType === id));
+  refreshRecordList();
+}
+
+function setRecordListPeriod(id) {
+  recordListState.periodFilter = id;
+  document.querySelectorAll('[data-rl-period]').forEach(b => b.classList.toggle('selected', b.dataset.rlPeriod === id));
+  document.getElementById('rl-custom-period').style.display = id === 'custom' ? 'flex' : 'none';
+  refreshRecordList();
+}
+
+function getPeriodRange(id) {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  if (id === 'today') return { from: todayStart, to: null };
+  if (id === 'week') {
+    const day = now.getDay(); // 0=Sun
+    const diffToMon = day === 0 ? 6 : day - 1; // 月曜始まり
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMon);
+    return { from: monday.toISOString(), to: null };
+  }
+  if (id === 'month') {
+    return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to: null };
+  }
+  if (id === '3month') {
+    return { from: new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString(), to: null };
+  }
+  if (id === 'all') return { from: null, to: null };
+  if (id === 'custom') {
+    const f = document.getElementById('rl-date-from')?.value;
+    const t = document.getElementById('rl-date-to')?.value;
+    return {
+      from: f ? new Date(f + 'T00:00:00').toISOString() : null,
+      to:   t ? new Date(t + 'T23:59:59').toISOString() : null,
+    };
+  }
+  return { from: null, to: null };
+}
+
+function recordListLabel(r) {
+  const isParts = r.color === 'なし' || r.color === '' || r.color == null;
+  const colorText = (r.color && r.color !== 'なし') ? ` ${r.color}` : '';
+  const product = r.product || r.partCode || r.category || '';
+  const productLabel = `${product}${colorText}`;
+  let detail = '';
+  if (r.type === '持ち出し' || r.type === 'ショルダー加工持ち出し' || r.type === '納品' || r.type === 'ショルダー加工納品') {
+    const unit = (r.type.includes('ショルダー')) ? '個' : (isParts ? 'セット' : '枚');
+    detail = `${r.quantity || 0}${unit}` + (r.name ? ` / 👤${r.name}` : '');
+    if (r.targetSku) detail += ` → ${r.targetSku}`;
+  } else if (r.type === '検品完了') {
+    detail = `OK:${r.quantityOk||0}` + ((r.quantityBGrade||0) > 0 ? ` B:${r.quantityBGrade}` : '') + ((r.quantityRejected||0) > 0 ? ` 不可:${r.quantityRejected}` : '') + (r.name ? ` / 👤${r.name}` : '');
+  } else if (r.type === '入庫') {
+    detail = `OK:${r.quantity||0}` + ((r.bGrade||0) > 0 ? ` B品:${r.bGrade}` : '');
+  } else if (r.type === '棚卸し' || r.type === 'パーツ棚卸し') {
+    detail = `OK:${r.quantity||0}` + ((r.bGrade||0) > 0 ? ` B品:${r.bGrade}` : '');
+  } else {
+    detail = `${r.quantity || 0}`;
+  }
+  return { productLabel, detail };
+}
+
+function refreshRecordList() {
+  const list = document.getElementById('rl-list');
+  const summary = document.getElementById('rl-summary');
+  if (!list) return;
+
+  const typeDef = RECORD_LIST_TYPES.find(t => t.id === recordListState.typeFilter);
+  const range = getPeriodRange(recordListState.periodFilter);
+  const productQuery = (document.getElementById('rl-filter-product')?.value || '').trim().toLowerCase();
+  recordListState.productFilter = productQuery;
+
+  let recs = state.records.slice();
+  if (typeDef && typeDef.types) {
+    const allowSet = new Set(typeDef.types);
+    recs = recs.filter(r => allowSet.has(r.type));
+  }
+  if (range.from) recs = recs.filter(r => (r.date || '') >= range.from);
+  if (range.to)   recs = recs.filter(r => (r.date || '') <= range.to);
+  if (productQuery) {
+    recs = recs.filter(r => {
+      const hay = `${r.product || ''} ${r.color || ''} ${r.productName || ''} ${r.partCode || ''} ${r.category || ''} ${r.targetSku || ''} ${r.name || ''}`.toLowerCase();
+      return hay.includes(productQuery);
+    });
+  }
+  recs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  summary.textContent = `${recs.length}件`;
+
+  if (recs.length === 0) {
+    list.innerHTML = '<div class="no-data">該当する記録がありません</div>';
+    return;
+  }
+
+  const TYPE_BADGE = {
+    '持ち出し':            { bg:'#fff3e0', color:'#e65100', label:'持ち出し' },
+    'ショルダー加工持ち出し': { bg:'#e3f2fd', color:'#1565c0', label:'🔗持ち出し' },
+    '納品':                { bg:'#e8f5e9', color:'#2e7d32', label:'納品' },
+    'ショルダー加工納品':    { bg:'#e3f2fd', color:'#1565c0', label:'🔗納品' },
+    '検品完了':            { bg:'#f3e5f5', color:'#6a1b9a', label:'検品' },
+    '入庫':                { bg:'#e0f2f1', color:'#00695c', label:'入庫' },
+    '棚卸し':              { bg:'#fff8e1', color:'#ef6c00', label:'棚卸し' },
+    'パーツ棚卸し':         { bg:'#fff8e1', color:'#ef6c00', label:'パーツ棚卸' },
+    '裁断':                { bg:'#fce4ec', color:'#c2185b', label:'裁断' },
+    '裁断完了':            { bg:'#fce4ec', color:'#c2185b', label:'裁断完了' },
+    'プリント':            { bg:'#ede7f6', color:'#4527a0', label:'プリント' },
+    'プリント完了':         { bg:'#ede7f6', color:'#4527a0', label:'プリント完了' },
+    '材料発注':            { bg:'#f5f5f5', color:'#424242', label:'材料発注' },
+    '材料入荷':            { bg:'#f5f5f5', color:'#424242', label:'材料入荷' },
+  };
+
+  list.innerHTML = recs.map(r => {
+    const { productLabel, detail } = recordListLabel(r);
+    const badge = TYPE_BADGE[r.type] || { bg:'#f2f2f7', color:'#1d1d1f', label: r.type };
+    const json = JSON.stringify(r).replace(/'/g, "&#39;");
+    return `<div class="alert-card" style="padding:10px 12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <span style="background:${badge.bg}; color:${badge.color}; font-size:11px; font-weight:600; padding:2px 8px; border-radius:8px;">${badge.label}</span>
+            <span style="font-size:14px; font-weight:600;">${productLabel}</span>
+          </div>
+          <div class="alert-detail" style="margin-top:4px;">${detail}</div>
+          <div style="font-size:11px; color:#aeaeb2; margin-top:2px;">${fmtDate(r.date)}</div>
+        </div>
+        <button onclick='openEditRecord(${json})' style="background:#f2f2f7; border:none; border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer; color:#007aff; font-weight:600; flex-shrink:0;">✏️修正</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ===== 縫製発注 =====
@@ -5342,10 +5596,12 @@ function refreshSettingsInfo() {
 }
 
 // ===== 棚卸し =====
-let tanaState = { product: null, sizeCode: '', color: '', quantityOk: 0, quantityBGrade: 0 };
+// ショルダー版棚卸を出す商品（製品コード）
+const SHOULDER_TANA_PRODUCTS = ['LB', 'LB_NAME', 'IB'];
+let tanaState = { product: null, sizeCode: '', color: '', quantityOk: 0, quantityBGrade: 0, shoulder: false };
 
 function initTanaoroshi() {
-  tanaState = { product: null, sizeCode: '', color: '', quantityOk: 0, quantityBGrade: 0 };
+  tanaState = { product: null, sizeCode: '', color: '', quantityOk: 0, quantityBGrade: 0, shoulder: false };
   const grid = document.getElementById('tana-product-buttons');
   grid.innerHTML = '';
   PRODUCTS.forEach(p => {
@@ -5357,9 +5613,32 @@ function initTanaoroshi() {
   });
   document.getElementById('tana-size-section').style.display = 'none';
   document.getElementById('tana-color-section').style.display = 'none';
+  const shSec = document.getElementById('tana-shoulder-section');
+  if (shSec) shSec.style.display = 'none';
   document.getElementById('tana-qty-section').style.display = 'none';
   updateTanaBtn();
   refreshTanaList();
+}
+
+function setTanaShoulder(on) {
+  tanaState.shoulder = !!on;
+  const yes = document.getElementById('tana-shoulder-yes');
+  const no  = document.getElementById('tana-shoulder-no');
+  if (yes) yes.classList.toggle('selected', !!on);
+  if (no)  no.classList.toggle('selected', !on);
+  // 現在の棚卸し情報を再表示
+  if (tanaState.color) {
+    const sku = tanaEffectiveSku();
+    document.getElementById('tana-qty-label').textContent = `${sku} / ${tanaState.color} の在庫数`;
+    const info = document.getElementById('tana-current-info');
+    const latest = findLatestTanaRecord(sku, tanaState.color);
+    if (latest) {
+      info.textContent = `現在の棚卸し: OK:${latest.quantity||0} B品:${latest.bGrade||0} / ${fmtDate(latest.date)}`;
+    } else {
+      info.textContent = '（まだ棚卸し記録はありません）';
+    }
+  }
+  updateTanaBtn();
 }
 
 function selectTanaProduct(product) {
@@ -5368,6 +5647,9 @@ function selectTanaProduct(product) {
   tanaState.color = '';
   tanaState.quantityOk = 0;
   tanaState.quantityBGrade = 0;
+  tanaState.shoulder = false;
+  const shSec = document.getElementById('tana-shoulder-section');
+  if (shSec) shSec.style.display = 'none';
 
   document.querySelectorAll('#tana-product-buttons .color-btn').forEach(b => b.classList.remove('selected'));
   event.target.classList.add('selected');
@@ -5404,6 +5686,9 @@ function selectTanaSize(sizeCode, el) {
   tanaState.color = '';
   tanaState.quantityOk = 0;
   tanaState.quantityBGrade = 0;
+  tanaState.shoulder = false;
+  const shSec = document.getElementById('tana-shoulder-section');
+  if (shSec) shSec.style.display = 'none';
 
   document.querySelectorAll('#tana-size-buttons .color-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
@@ -5417,7 +5702,8 @@ function selectTanaSize(sizeCode, el) {
 function buildTanaColorButtons(product) {
   const colorGrid = document.getElementById('tana-color-buttons');
   colorGrid.innerHTML = '';
-  product.colors.forEach(c => {
+  const colors = effectiveColorsForSize(product, tanaState.sizeCode);
+  colors.forEach(c => {
     const btn = document.createElement('button');
     btn.className = 'color-btn';
     btn.textContent = c;
@@ -5427,7 +5713,29 @@ function buildTanaColorButtons(product) {
 }
 
 function tanaEffectiveSku() {
-  return tanaState.sizeCode || (tanaState.product && tanaState.product.code) || '';
+  const base = tanaState.sizeCode || (tanaState.product && tanaState.product.code) || '';
+  if (!base) return '';
+  if (!tanaState.shoulder) return base;
+  // ショルダー版：色コードを含めた SKU で記録（例: LBL_BL_SHO, IBSS_KI_SHO）
+  const colorCode = (tanaState.color || '').split(' ')[0];
+  if (!colorCode) return base + '_SHO';
+  return `${base}_${colorCode}_SHO`;
+}
+
+function tanaShoulderEligible() {
+  return tanaState.product && SHOULDER_TANA_PRODUCTS.includes(tanaState.product.code);
+}
+
+function refreshTanaShoulderSection() {
+  const sec = document.getElementById('tana-shoulder-section');
+  if (!sec) return;
+  if (tanaShoulderEligible() && tanaState.color) {
+    sec.style.display = '';
+    setTanaShoulder(tanaState.shoulder); // 表示同期
+  } else {
+    sec.style.display = 'none';
+    tanaState.shoulder = false;
+  }
 }
 
 function findLatestTanaRecord(sku, color) {
@@ -5447,12 +5755,18 @@ function selectTanaColor(color, el) {
   tanaState.color = color;
   tanaState.quantityOk = 0;
   tanaState.quantityBGrade = 0;
+  // 色を変えたらショルダートグルもリセット（同じ商品×色×通常版が標準想定）
+  tanaState.shoulder = false;
 
   document.querySelectorAll('#tana-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
 
   document.getElementById('tana-ok-input').value = '0';
   document.getElementById('tana-bgrade-input').value = '0';
+
+  // ショルダーセクション表示を更新（対象商品なら出す）
+  refreshTanaShoulderSection();
+
   const sku = tanaEffectiveSku();
   document.getElementById('tana-qty-label').textContent = `${sku} / ${color} の在庫数`;
 
@@ -5490,7 +5804,8 @@ function updateTanaBtn() {
   } else {
     const ok = parseInt(document.getElementById('tana-ok-input').value) || 0;
     const b = parseInt(document.getElementById('tana-bgrade-input').value) || 0;
-    btn.textContent = `棚卸しを登録する ✅ ${tanaEffectiveSku()} ${tanaState.color} OK:${ok} B品:${b}`;
+    const shoTag = tanaState.shoulder ? ' 🔗' : '';
+    btn.textContent = `棚卸しを登録する ✅${shoTag} ${tanaEffectiveSku()} ${tanaState.color} OK:${ok} B品:${b}`;
     btn.className = 'submit-btn ready';
   }
 }
@@ -5505,15 +5820,18 @@ function submitTanaoroshi() {
   }
 
   const sku = tanaEffectiveSku();
+  const baseName = SKU_NAMES[tanaState.sizeCode || tanaState.product.code] || tanaState.product.name;
+  const productName = tanaState.shoulder ? `${baseName}（ショルダー版）` : baseName;
   const record = {
     date: new Date().toISOString(),
     type: '棚卸し',
     product: sku,
-    productName: SKU_NAMES[sku] || tanaState.product.name,
+    productName: productName,
     color: tanaState.color,
     quantity: qtyOk,
     bGrade: qtyB
   };
+  if (tanaState.shoulder) record.shoulder = true;
   state.records.push(record);
   localStorage.setItem('kitokito_records', JSON.stringify(state.records));
   gasPost('add', { record });
@@ -5522,8 +5840,11 @@ function submitTanaoroshi() {
   tanaState.color = '';
   tanaState.quantityOk = 0;
   tanaState.quantityBGrade = 0;
+  tanaState.shoulder = false;
   document.querySelectorAll('#tana-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('tana-qty-section').style.display = 'none';
+  const shSec = document.getElementById('tana-shoulder-section');
+  if (shSec) shSec.style.display = 'none';
   document.getElementById('tana-current-info').textContent = '';
   updateTanaBtn();
   refreshTanaList();
@@ -5540,9 +5861,15 @@ function refreshTanaList() {
   // 最新のものを上に
   const sorted = [...tana].sort((a, b) => b.date.localeCompare(a.date));
   el.innerHTML = sorted.map(r => {
+    const json = JSON.stringify(r).replace(/'/g, "&#39;");
     return `<div class="alert-card" style="padding:10px 16px;">
-      <div class="alert-title" style="font-size:14px;">${r.product} / ${r.color}</div>
-      <div class="alert-detail">OK:${r.quantity} B品:${r.bGrade} / ${fmtDate(r.date)}</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="flex:1; min-width:0;">
+          <div class="alert-title" style="font-size:14px;">${r.product} / ${r.color}</div>
+          <div class="alert-detail">OK:${r.quantity||0} B品:${r.bGrade||0} / ${fmtDate(r.date)}</div>
+        </div>
+        <button onclick='openEditRecord(${json})' style="background:#f2f2f7; border:none; border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer; color:#007aff; font-weight:600; flex-shrink:0;">✏️修正</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -5553,6 +5880,7 @@ showScreen = function(id) {
   _showScreenV2(id);
   if (id === 'screen-settings') refreshSettingsInfo();
   if (id === 'screen-tanaoroshi') initTanaoroshi();
+  if (id === 'screen-record-list') initRecordList();
 };
 
 // 在庫サマリーに棚卸しデータも含める（refreshStockSummaryを上書き）
@@ -5660,7 +5988,8 @@ function generateAllSKUs() {
   PRODUCTS.forEach(p => {
     const sizeCodes = p.sizes || [p.code];
     sizeCodes.forEach(sizeCode => {
-      p.colors.forEach(colorStr => {
+      const colorList = effectiveColorsForSize(p, sizeCode);
+      colorList.forEach(colorStr => {
         const colorCode = colorStr.split(' ')[0];
         const colorName = colorStr.substring(colorCode.length).trim() || COLOR_NAMES[colorCode] || colorCode;
         const groupCode = p.code;
