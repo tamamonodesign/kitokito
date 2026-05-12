@@ -166,7 +166,7 @@ function doGet(e) {
  * POSTリクエスト: action に応じて処理を分岐
  *   - "add": 1件追加
  *   - "bulkAdd": 複数件一括追加
- *   - "clear": 全データ行削除（ヘッダーは残す）
+ *   - "delete": 1件削除
  * @param {Object} e - リクエストイベント
  * @return {GoogleAppsScript.Content.TextOutput}
  */
@@ -215,16 +215,6 @@ function doPost(e) {
       return createJsonResponse({ success: true, count: rows.length });
     }
 
-    // --- action: clear（全データ削除、ヘッダーは保持）---
-    if (action === 'clear') {
-      var lastRow = sheet.getLastRow();
-      if (lastRow > 1) {
-        sheet.deleteRows(2, lastRow - 1);
-      }
-
-      return createJsonResponse({ success: true, count: 0 });
-    }
-
     // --- action: delete（1件削除）---
     if (action === 'delete') {
       var delRecord = body.record || body;
@@ -259,7 +249,7 @@ function doPost(e) {
     // 不明なアクション
     return createJsonResponse({
       success: false,
-      error: '不明なアクションです: ' + action + '（add, bulkAdd, delete, clear のいずれかを指定してください）'
+      error: '不明なアクションです: ' + action + '（add, bulkAdd, delete のいずれかを指定してください）'
     });
 
   } catch (error) {

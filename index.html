@@ -244,13 +244,6 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     </div>
 
     <div class="form-section">
-      <h3>📥 データの復元</h3>
-      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">バックアップファイルからデータを復元します。</p>
-      <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importData(event)">
-      <button class="submit-btn ready" onclick="document.getElementById('import-file').click()" style="margin-top:0; background:#34c759;">バックアップから復元する</button>
-    </div>
-
-    <div class="form-section">
       <h3>📋 棚卸し（在庫の一括登録）</h3>
       <p style="font-size:13px; color:#86868b; margin-bottom:12px;">現在の在庫数を商品×カラーごとに登録できます。</p>
       <button class="submit-btn ready" onclick="showScreen('screen-tanaoroshi')" style="margin-top:0; background:#ff9500;">棚卸しを始める</button>
@@ -5423,37 +5416,6 @@ function exportZentaiCSV() {
   a.download = 'kitokito_zentai_' + dateStr + '.csv';
   a.click();
   URL.revokeObjectURL(url);
-}
-
-function importData(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (!data.records || !Array.isArray(data.records)) {
-        alert('正しいバックアップファイルではありません');
-        return;
-      }
-      const msg = `${data.records.length}件の記録を復元します。\n現在の${state.records.length}件のデータは上書きされます。\n\nよろしいですか？`;
-      if (!confirm(msg)) return;
-
-      state.records = data.records;
-      localStorage.setItem('kitokito_records', JSON.stringify(state.records));
-      // GASにも同期（クリアして全件再投入）
-      gasPost('clear', {}).then(() => {
-        gasPost('bulkAdd', { records: state.records });
-      });
-      alert('復元が完了しました！');
-      refreshSettingsInfo();
-    } catch(err) {
-      alert('ファイルの読み込みに失敗しました: ' + err.message);
-    }
-  };
-  reader.readAsText(file);
-  event.target.value = '';
 }
 
 // ===== 初期データ取り込み（マージ方式） =====
