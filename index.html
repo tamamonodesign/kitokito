@@ -133,6 +133,14 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 .bgrade-qty .qty-btn { width: 36px; height: 36px; font-size: 18px; }
 .bgrade-qty .qty-display { font-size: 24px; min-width: 40px; }
 
+/* 検品一括選択 */
+.kenpin-batch-bar { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; margin:0 16px 12px; background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+.kenpin-batch-bar label { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:500; cursor:pointer; }
+.kenpin-check-row { display:flex; align-items:center; gap:12px; }
+.kenpin-check-row .check-box { flex-shrink:0; }
+.kenpin-check-row .kenpin-card-body { flex:1; min-width:0; cursor:pointer; }
+.kenpin-batch-count { font-size:13px; color:#0071e3; font-weight:600; }
+
 /* 発注待ちリスト */
 .pending-order { background: white; border-radius: 12px; padding: 16px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.15s; }
 .pending-order:active { transform: scale(0.98); }
@@ -800,7 +808,17 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <h1>🔍 検品する</h1>
     <p class="subtitle">検品する納品を選んでください</p>
     <div id="kenpin-no-pending" class="no-pending" style="display:none;">検品待ちの納品はありません</div>
+    <div id="kenpin-batch-bar" class="kenpin-batch-bar" style="display:none;">
+      <label><span class="check-box" id="kenpin-check-all" onclick="toggleKenpinCheckAll()"></span> 全選択</label>
+      <span class="kenpin-batch-count" id="kenpin-batch-count"></span>
+    </div>
     <div id="kenpin-pending-list" style="padding:0 16px;"></div>
+    <div id="kenpin-batch-submit-area" style="display:none; padding:16px;">
+      <button class="submit-btn ready" id="kenpin-batch-btn" onclick="submitKenpinBatch()">
+        ✅ 選択した納品を全数OK で一括登録
+      </button>
+      <div style="font-size:12px; color:#86868b; text-align:center; margin-top:8px;">B品・不可がある場合はカード右側をタップして個別入力</div>
+    </div>
   </div>
 
   <!-- ========== 検品：入力画面 ========== -->
@@ -2242,7 +2260,7 @@ const MATERIAL_UNITS = {
 };
 
 // ===== データ =====
-const STAFF_NAMES = ['郁子', '中務', '山中', '水谷', '西本', '平瀬', '川畑', '武原', '林田', '木原'];
+const STAFF_NAMES = ['郁子', '中務', '山中', '水谷', '西本', '平瀬', '川畑', '武原', '林田', '木原', '水崎'];
 
 // 持ち出し・納品用の商品リスト（グループ表示）
 const PRODUCTS = [
@@ -3596,6 +3614,8 @@ function submitArrive() {
 
 // ===== 検品フロー =====
 let kenpinState = { selectedDelivery: null, quantityOk: 0, quantityBGrade: 0, quantityRejected: 0, bgradeSewing: 0, bgradeFabric: 0, rejectedSewing: 0, rejectedFabric: 0 };
+let kenpinPendingList = [];
+let kenpinChecked = new Set();
 
 function getPendingDeliveries() {
   const deliveries = state.records.filter(r => r.type === '納品');
@@ -3611,22 +3631,28 @@ function getPendingKenpins() {
 
 function startKenpin() {
   kenpinState = { selectedDelivery: null, quantityOk: 0, quantityBGrade: 0, quantityRejected: 0, lastRecord: null };
-  const pending = getPendingDeliveries();
+  kenpinPendingList = getPendingDeliveries();
+  kenpinChecked = new Set();
   const listEl = document.getElementById('kenpin-pending-list');
   const noEl = document.getElementById('kenpin-no-pending');
+  const batchBar = document.getElementById('kenpin-batch-bar');
+  const batchSubmit = document.getElementById('kenpin-batch-submit-area');
 
-  if (pending.length === 0) {
+  if (kenpinPendingList.length === 0) {
     listEl.innerHTML = '';
     noEl.style.display = 'block';
+    batchBar.style.display = 'none';
+    batchSubmit.style.display = 'none';
     showScreen('screen-kenpin-list');
     return;
   }
 
   noEl.style.display = 'none';
+  batchBar.style.display = 'flex';
 
-  // 人ごとにグループ化
   const byName = {};
-  pending.forEach(d => {
+  kenpinPendingList.forEach((d, i) => {
+    d._batchIdx = i;
     if (!byName[d.name]) byName[d.name] = [];
     byName[d.name].push(d);
   });
@@ -3636,26 +3662,28 @@ function startKenpin() {
     html += `<div style="margin-bottom:20px;">`;
     html += `<div style="font-size:15px; font-weight:600; margin-bottom:8px; padding-left:4px;">👤 ${name}さん</div>`;
     byName[name].forEach(d => {
+      const i = d._batchIdx;
       const isParts = d.color === 'なし';
       const colorText = isParts ? '' : ` ${d.color}`;
       const unitText = isParts ? 'セット' : '枚';
       const productName = d.productName || d.product;
       const dt = new Date(d.date);
       const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
-      html += `<div class="alert-card" onclick='selectKenpinDelivery(${JSON.stringify(d).replace(/'/g, "&#39;")})'
-        style="cursor:pointer; margin-bottom:8px; padding:14px 16px; background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-        <div style="font-size:16px; font-weight:600;">${d.product}${colorText}</div>
-        <div style="font-size:13px; color:#86868b; margin-top:2px;">${productName}</div>
-        <div style="font-size:14px; margin-top:6px;">
-          納品数 <strong>${d.quantity}${unitText}</strong>
+      html += `<div class="kenpin-check-row" style="margin-bottom:8px; display:flex; align-items:center; gap:12px;">
+        <span class="check-box" id="kenpin-chk-${i}" onclick="toggleKenpinCheck(${i})" style="flex-shrink:0;"></span>
+        <div class="kenpin-card-body" onclick='selectKenpinDelivery(${JSON.stringify(d).replace(/'/g, "&#39;")})' style="flex:1; cursor:pointer; padding:14px 16px; background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-size:16px; font-weight:600;">${d.product}${colorText}</div>
+          <div style="font-size:13px; color:#86868b; margin-top:2px;">${productName}</div>
+          <div style="font-size:14px; margin-top:6px;">納品数 <strong>${d.quantity}${unitText}</strong></div>
+          <div style="font-size:11px; color:#aeaeb2; margin-top:4px;">${dateStr} 納品</div>
         </div>
-        <div style="font-size:11px; color:#aeaeb2; margin-top:4px;">${dateStr} 納品</div>
       </div>`;
     });
     html += `</div>`;
   });
 
   listEl.innerHTML = html;
+  updateKenpinBatchUI();
   showScreen('screen-kenpin-list');
 }
 
@@ -3913,6 +3941,101 @@ function undoLastKenpinRecord() {
   document.getElementById('kenpin-success-detail').innerHTML =
     `<div style="font-size:16px; color:#ff3b30; font-weight:600;">取り消しました</div>`;
   document.getElementById('kenpin-success-undo-area').style.display = 'none';
+}
+
+// ===== 検品一括登録 =====
+function toggleKenpinCheck(idx) {
+  if (kenpinChecked.has(idx)) kenpinChecked.delete(idx);
+  else kenpinChecked.add(idx);
+  updateKenpinBatchUI();
+}
+
+function toggleKenpinCheckAll() {
+  if (kenpinChecked.size === kenpinPendingList.length) {
+    kenpinChecked.clear();
+  } else {
+    kenpinPendingList.forEach((_, i) => kenpinChecked.add(i));
+  }
+  updateKenpinBatchUI();
+}
+
+function updateKenpinBatchUI() {
+  kenpinPendingList.forEach((_, i) => {
+    const el = document.getElementById(`kenpin-chk-${i}`);
+    if (el) {
+      if (kenpinChecked.has(i)) el.classList.add('checked');
+      else el.classList.remove('checked');
+    }
+  });
+  const allEl = document.getElementById('kenpin-check-all');
+  if (allEl) {
+    if (kenpinChecked.size === kenpinPendingList.length && kenpinPendingList.length > 0) allEl.classList.add('checked');
+    else allEl.classList.remove('checked');
+  }
+  const countEl = document.getElementById('kenpin-batch-count');
+  const submitArea = document.getElementById('kenpin-batch-submit-area');
+  const btn = document.getElementById('kenpin-batch-btn');
+  if (kenpinChecked.size > 0) {
+    countEl.textContent = `${kenpinChecked.size}件 選択中`;
+    submitArea.style.display = 'block';
+    btn.textContent = `✅ ${kenpinChecked.size}件を全数OK で一括登録`;
+  } else {
+    countEl.textContent = '';
+    submitArea.style.display = 'none';
+  }
+}
+
+function submitKenpinBatch() {
+  if (kenpinChecked.size === 0) return;
+  const selected = [...kenpinChecked].map(i => kenpinPendingList[i]);
+  let msg = `以下 ${selected.length}件 を全数OKで検品登録しますか？\n\n`;
+  selected.forEach(d => {
+    const isParts = d.color === 'なし';
+    const colorText = isParts ? '' : ` ${d.color}`;
+    const unitText = isParts ? 'セット' : '枚';
+    msg += `・${d.product}${colorText}  ${d.quantity}${unitText}（${d.name}）\n`;
+  });
+  if (!confirm(msg)) return;
+
+  const batchRecords = [];
+  selected.forEach(d => {
+    const record = {
+      date: new Date().toISOString(),
+      type: '検品完了',
+      nouhinDate: d.date,
+      name: d.name,
+      product: d.product,
+      productName: d.productName,
+      color: d.color,
+      quantityOk: parseInt(d.quantity) || 0,
+      quantityBGrade: 0,
+      quantityRejected: 0,
+      bgradeSewing: 0,
+      bgradeFabric: 0,
+      rejectedSewing: 0,
+      rejectedFabric: 0,
+      quantityTotal: d.quantity
+    };
+    state.records.push(record);
+    gasPost('add', { record });
+    batchRecords.push(record);
+  });
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+
+  let detailHtml = `<div style="font-size:13px; color:#86868b; margin-bottom:8px;">以下 ${batchRecords.length}件 を一括登録しました</div>`;
+  batchRecords.forEach(r => {
+    const isParts = r.color === 'なし';
+    const colorText = isParts ? '' : ` ${r.color}`;
+    const unitText = isParts ? 'セット' : '枚';
+    detailHtml += `<div style="padding:6px 0; border-bottom:1px solid #f0f0f0;">
+      <span style="font-weight:600;">${r.product}${colorText}</span>
+      <span style="color:#86868b; font-size:13px; margin-left:8px;">✅ ${r.quantityOk}${unitText}</span>
+    </div>`;
+  });
+  document.getElementById('kenpin-success-detail').innerHTML = detailHtml;
+  document.getElementById('kenpin-success-undo-area').style.display = 'none';
+  kenpinState.lastRecord = null;
+  showScreen('screen-kenpin-success');
 }
 
 // ===== 新・入庫フロー（検品済みリストベース） =====
