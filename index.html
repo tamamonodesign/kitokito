@@ -1115,11 +1115,11 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <div class="form-section" id="order-qty-section" style="display:none;">
       <h3>数量</h3>
       <div class="qty-control">
-        <button class="qty-btn minus" onclick="changeOrderQty(-1)">−</button>
-        <input type="number" class="qty-input" id="order-qty-input" min="1" value="1" onchange="syncOrderQtyFromInput()">
-        <button class="qty-btn plus" onclick="changeOrderQty(1)">+</button>
+        <button class="qty-btn minus" onclick="changeMaterialQty(-1)">−</button>
+        <input type="number" class="qty-input" id="material-qty-input" min="1" value="1" onchange="syncMaterialQtyFromInput()">
+        <button class="qty-btn plus" onclick="changeMaterialQty(1)">+</button>
       </div>
-      <p style="text-align:center; color:#86868b; font-size:14px; margin-top:8px;" id="order-qty-unit"></p>
+      <p style="text-align:center; color:#86868b; font-size:14px; margin-top:8px;" id="material-qty-unit"></p>
     </div>
 
     <div class="form-section">
@@ -3369,7 +3369,7 @@ function startMaterial(type) {
   document.getElementById('order-material-section').style.display = 'none';
   document.getElementById('order-qty-section').style.display = 'none';
   document.getElementById('order-memo').value = '';
-  document.getElementById('order-qty-input').value = '1';
+  document.getElementById('material-qty-input').value = '1';
   updateMaterialBtn('order');
   showScreen('screen-order');
 }
@@ -3402,7 +3402,7 @@ function selectOrderCategory(category, btn) {
     list.appendChild(inputWrap);
     document.getElementById('order-qty-section').style.display = '';
     const unit = MATERIAL_UNITS[category.name] || '';
-    document.getElementById('order-qty-unit').textContent = `単位: ${unit}`;
+    document.getElementById('material-qty-unit').textContent = `単位: ${unit}`;
     updateMaterialBtn('order');
     return;
   }
@@ -3419,7 +3419,7 @@ function selectOrderCategory(category, btn) {
       // 数量セクション表示
       document.getElementById('order-qty-section').style.display = '';
       const unit = MATERIAL_UNITS[category.name] || '';
-      document.getElementById('order-qty-unit').textContent = `単位: ${unit}`;
+      document.getElementById('material-qty-unit').textContent = `単位: ${unit}`;
       updateMaterialBtn('order');
     };
     list.appendChild(item);
@@ -3439,13 +3439,13 @@ function onThreadInput() {
   updateMaterialBtn('order');
 }
 
-function changeOrderQty(delta) {
+function changeMaterialQty(delta) {
   materialState.order.quantity = Math.max(1, materialState.order.quantity + delta);
-  document.getElementById('order-qty-input').value = materialState.order.quantity;
+  document.getElementById('material-qty-input').value = materialState.order.quantity;
   updateMaterialBtn('order');
 }
-function syncOrderQtyFromInput() {
-  materialState.order.quantity = Math.max(1, parseInt(document.getElementById('order-qty-input').value) || 1);
+function syncMaterialQtyFromInput() {
+  materialState.order.quantity = Math.max(1, parseInt(document.getElementById('material-qty-input').value) || 1);
   updateMaterialBtn('order');
 }
 
@@ -4172,9 +4172,16 @@ function refreshMaterialAlerts() {
     pending.forEach(p => {
       const colorInfo = p.color ? ` / ${p.color}` : '';
       const qtyInfo = p.quantity ? ` ${p.quantity}${p.unit || ''}` : '';
+      const priceInfo = p.price ? ` / ¥${p.price.toLocaleString()}` : '';
+      const json = JSON.stringify(p).replace(/'/g, "&#39;");
       html += `<div class="alert-card urgent">
-        <div class="alert-title">${p.material}${colorInfo} <span class="badge red">発注済み・未入荷</span></div>
-        <div class="alert-detail">${fmtDate(p.date)} 発注${qtyInfo}${p.memo ? ' / ' + p.memo : ''}</div>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div style="flex:1; min-width:0;">
+            <div class="alert-title">${p.material}${colorInfo} <span class="badge red">発注済み・未入荷</span></div>
+            <div class="alert-detail">${fmtDate(p.date)} 発注${qtyInfo}${priceInfo}${p.memo ? ' / ' + p.memo : ''}</div>
+          </div>
+          <button onclick='openEditRecord(${json})' style="background:#f2f2f7; border:none; border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer; color:#007aff; font-weight:600; flex-shrink:0;">✏️修正</button>
+        </div>
       </div>`;
     });
   }
@@ -4415,13 +4422,15 @@ let editState = { original: null, edited: null, returnTo: 'screen-dash-mom' };
 
 // 記録の一意キー（date+type+product+color+name）で state.records から検索
 function findRecordIndex(rec) {
-  return state.records.findIndex(r =>
-    r.date === rec.date &&
-    r.type === rec.type &&
-    r.product === rec.product &&
-    r.color === rec.color &&
-    (r.name || '') === (rec.name || '')
-  );
+  return state.records.findIndex(r => {
+    if (r.date !== rec.date || r.type !== rec.type) return false;
+    if (rec.type === '材料発注' || rec.type === '材料入荷') {
+      return r.material === rec.material;
+    }
+    return r.product === rec.product &&
+      r.color === rec.color &&
+      (r.name || '') === (rec.name || '');
+  });
 }
 
 function openEditRecord(record) {
@@ -4431,16 +4440,18 @@ function openEditRecord(record) {
   const active = document.querySelector('.container > div:not(.hidden)');
   editState.returnTo = (active && active.id) ? active.id : 'screen-dash-mom';
 
+  const isMaterial = record.type === '材料発注' || record.type === '材料入荷';
   const isParts = record.color === 'なし';
   const unit = isParts ? 'セット' : '枚';
   const colorText = isParts ? '' : ` ${record.color}`;
 
   document.getElementById('edit-record-type').textContent = `種別：${record.type}`;
-  const productLabel = record.product || record.partCode || record.category || '';
+  const productLabel = isMaterial ? (record.material || '') : (record.product || record.partCode || record.category || '');
   document.getElementById('edit-record-info').innerHTML =
     `<div style="font-size:13px; color:#86868b; margin-bottom:4px;">修正する記録</div>`
-    + `<div style="font-size:16px; font-weight:600;">${productLabel}${colorText}</div>`
+    + `<div style="font-size:16px; font-weight:600;">${productLabel}${isMaterial ? '' : colorText}</div>`
     + (record.productName ? `<div style="font-size:13px; color:#86868b; margin-top:2px;">${record.productName}</div>` : '')
+    + (isMaterial && record.category ? `<div style="font-size:13px; color:#86868b; margin-top:2px;">${record.category}</div>` : '')
     + (record.name ? `<div style="font-size:14px; margin-top:6px;">👤 ${record.name}さん</div>` : '')
     + `<div style="font-size:12px; color:#aeaeb2; margin-top:4px;">登録日時: ${fmtDate(record.date)}</div>`;
 
@@ -4468,7 +4479,25 @@ function openEditRecord(record) {
     </div>`;
 
   let qtyFieldsHtml = '';
-  if (record.type === '持ち出し' || record.type === '納品' || record.type === 'ショルダー加工持ち出し' || record.type === 'ショルダー加工納品') {
+  if (record.type === '材料発注') {
+    const mu = record.unit || '';
+    qtyFieldsHtml = qtyRow(`数量${mu ? '（' + mu + '）' : ''}`, 'quantity', record.quantity || 0, 1)
+      + `<div style="background:white; border-radius:12px; padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">💰 価格（税込・任意）</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="number" id="edit-input-price" value="${record.price || 0}" min="0"
+            onchange="editState.edited.price = parseInt(this.value) || 0"
+            style="flex:1; text-align:right; font-size:18px; font-weight:600; border:1px solid #e5e5ea; border-radius:10px; padding:10px;">
+          <span style="font-size:16px; color:#86868b;">円</span>
+        </div>
+      </div>`
+      + `<div style="background:white; border-radius:12px; padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">📝 メモ（任意）</div>
+        <input type="text" id="edit-input-memo" value="${(record.memo || '').replace(/"/g, '&quot;')}"
+          onchange="editState.edited.memo = this.value"
+          style="width:100%; padding:10px; font-size:15px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box;">
+      </div>`;
+  } else if (record.type === '持ち出し' || record.type === '納品' || record.type === 'ショルダー加工持ち出し' || record.type === 'ショルダー加工納品') {
     const u = (record.type.includes('ショルダー')) ? '個' : unit;
     qtyFieldsHtml = qtyRow(`${record.type}数量（${u}）`, 'quantity', record.quantity || 0, 1);
   } else if (record.type === '検品完了') {
@@ -4485,7 +4514,6 @@ function openEditRecord(record) {
       qtyRow(`✅ OK数（${unit}）`, 'quantity', record.quantity || 0)
       + qtyRow(`⚠️ B品数（${unit}）`, 'bGrade', record.bGrade || 0);
   } else {
-    // その他（裁断・プリント・材料発注・材料入荷など）は数量のみ
     qtyFieldsHtml = qtyRow('数量', 'quantity', record.quantity || 0);
   }
 
@@ -4539,6 +4567,7 @@ function saveEditRecord() {
   alert('修正しました');
   showScreen(back);
   if (back === 'screen-dash-mom') refreshMomDash();
+  if (back === 'screen-dash-megu') { refreshMeguDash(); }
   if (back === 'screen-record-list') refreshRecordList();
   if (back === 'screen-tanaoroshi') { refreshTanaList(); }
 }
@@ -4645,10 +4674,11 @@ function getPeriodRange(id) {
 }
 
 function recordListLabel(r) {
+  const isMaterial = r.type === '材料発注' || r.type === '材料入荷';
   const isParts = r.color === 'なし' || r.color === '' || r.color == null;
   const colorText = (r.color && r.color !== 'なし') ? ` ${r.color}` : '';
-  const product = r.product || r.partCode || r.category || '';
-  const productLabel = `${product}${colorText}`;
+  const product = isMaterial ? (r.material || '') : (r.product || r.partCode || r.category || '');
+  const productLabel = isMaterial ? product : `${product}${colorText}`;
   let detail = '';
   if (r.type === '持ち出し' || r.type === 'ショルダー加工持ち出し' || r.type === '納品' || r.type === 'ショルダー加工納品') {
     const unit = (r.type.includes('ショルダー')) ? '個' : (isParts ? 'セット' : '枚');
@@ -4660,6 +4690,13 @@ function recordListLabel(r) {
     detail = `OK:${r.quantity||0}` + ((r.bGrade||0) > 0 ? ` B品:${r.bGrade}` : '');
   } else if (r.type === '棚卸し' || r.type === 'パーツ棚卸し') {
     detail = `OK:${r.quantity||0}` + ((r.bGrade||0) > 0 ? ` B品:${r.bGrade}` : '');
+  } else if (r.type === '材料発注') {
+    detail = `${r.quantity || 0}${r.unit || ''}`;
+    if (r.price) detail += ` / ¥${r.price.toLocaleString()}`;
+    if (r.memo) detail += ` / ${r.memo}`;
+  } else if (r.type === '材料入荷') {
+    detail = r.status === 'normal' ? '予定通り' : (r.status === 'changed' ? '変更あり' : '');
+    if (r.memo) detail += (detail ? ' / ' : '') + r.memo;
   } else {
     detail = `${r.quantity || 0}`;
   }
@@ -4685,7 +4722,7 @@ function refreshRecordList() {
   if (range.to)   recs = recs.filter(r => (r.date || '') <= range.to);
   if (productQuery) {
     recs = recs.filter(r => {
-      const hay = `${r.product || ''} ${r.color || ''} ${r.productName || ''} ${r.partCode || ''} ${r.category || ''} ${r.targetSku || ''} ${r.name || ''}`.toLowerCase();
+      const hay = `${r.product || ''} ${r.color || ''} ${r.productName || ''} ${r.partCode || ''} ${r.category || ''} ${r.targetSku || ''} ${r.name || ''} ${r.material || ''}`.toLowerCase();
       return hay.includes(productQuery);
     });
   }
