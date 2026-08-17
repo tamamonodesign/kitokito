@@ -258,6 +258,12 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     </div>
 
     <div class="form-section">
+      <h3>🧵 パーツ棚卸し（材料の在庫登録）</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">裁断済みパーツ・材料の在庫数を登録します。全体管理の「材料信号」（◎△✕）はここで登録した数字を元に表示されます。</p>
+      <button class="submit-btn ready" onclick="showScreen('screen-parts-tanaoroshi')" style="margin-top:0; background:#ff9500;">パーツ棚卸しを始める</button>
+    </div>
+
+    <div class="form-section">
       <h3>📂 初期データ取り込み</h3>
       <p style="font-size:13px; color:#86868b; margin-bottom:12px;">棚卸しJSONデータを現在のデータにマージして取り込みます。既存データは消えません。</p>
       <input type="file" id="initial-import-file" accept=".json" style="display:none;" onchange="importInitialData(event)">
@@ -336,6 +342,43 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <div class="form-section" style="margin-top:16px;">
       <h3>登録済みの棚卸しデータ</h3>
       <div id="tana-registered-list"></div>
+    </div>
+  </div>
+
+  <!-- ========== パーツ棚卸し画面 ========== -->
+  <div id="screen-parts-tanaoroshi" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-settings')">← もどる</button>
+    <h1>🧵 パーツ棚卸し</h1>
+    <p class="subtitle">裁断済みパーツ・材料の在庫数を入力</p>
+
+    <div class="form-section">
+      <h3>カテゴリを選んでください</h3>
+      <div class="color-grid" id="ptana-category-buttons"></div>
+    </div>
+
+    <div class="form-section" id="ptana-search-section" style="display:none;">
+      <h3>パーツを選んでください</h3>
+      <input type="text" id="ptana-search-input" placeholder="パーツ名・品番で検索（例: 713Z）" oninput="renderPtanaPartList()" style="width:100%; box-sizing:border-box; padding:10px 12px; font-size:14px; border:1px solid #d1d1d6; border-radius:8px; margin-bottom:10px;">
+      <div id="ptana-part-list"></div>
+    </div>
+
+    <div class="form-section" id="ptana-qty-section" style="display:none;">
+      <h3 id="ptana-qty-label">在庫数</h3>
+      <div id="ptana-current-info" style="font-size:13px; color:#86868b; margin-bottom:10px;"></div>
+      <div class="bgrade-qty" style="justify-content:center;">
+        <button class="qty-btn minus" onclick="changePtanaQty(-1)">−</button>
+        <input type="number" class="qty-input" id="ptana-qty-input" min="0" value="0" oninput="updatePtanaBtn()">
+        <button class="qty-btn plus" onclick="changePtanaQty(1)">+</button>
+      </div>
+    </div>
+
+    <button class="submit-btn not-ready" id="ptana-submit-btn" onclick="submitPtanaoroshi()">
+      カテゴリを選んでください
+    </button>
+
+    <div class="form-section" style="margin-top:16px;">
+      <h3>登録済みのパーツ棚卸しデータ</h3>
+      <div id="ptana-registered-list"></div>
     </div>
   </div>
 
@@ -5616,10 +5659,8 @@ function importInitialData(event) {
 
       state.records = [...filtered, ...data.records];
       localStorage.setItem('kitokito_records', JSON.stringify(state.records));
-      // GASにも同期（クリアして全件再投入）
-      gasPost('clear', {}).then(() => {
-        gasPost('bulkAdd', { records: state.records });
-      });
+      // GASには新規インポート分だけ追加（'clear'アクションは廃止済み。重複は「最新の日付が勝つ」集計ロジックで吸収される）
+      gasPost('bulkAdd', { records: data.records });
 
       alert(`取り込み完了！\n製品: ${productRecs.length}件\nパーツ: ${partsRecs.length}件\n合計: ${state.records.length}件`);
       refreshSettingsInfo();
@@ -5996,12 +6037,167 @@ function refreshTanaList() {
   }).join('');
 }
 
+// ===== パーツ棚卸し =====
+let ptanaState = { category: '', partCode: '', partName: '', skuGroup: '' };
+
+function initPtanaoroshi() {
+  ptanaState = { category: '', partCode: '', partName: '', skuGroup: '' };
+  const grid = document.getElementById('ptana-category-buttons');
+  grid.innerHTML = '';
+  Object.entries(CATEGORY_LABELS_MAT).forEach(([code, label]) => {
+    const btn = document.createElement('button');
+    btn.className = 'color-btn';
+    btn.textContent = label;
+    btn.onclick = () => selectPtanaCategory(code, btn);
+    grid.appendChild(btn);
+  });
+  document.getElementById('ptana-search-section').style.display = 'none';
+  document.getElementById('ptana-qty-section').style.display = 'none';
+  const input = document.getElementById('ptana-search-input');
+  if (input) input.value = '';
+  updatePtanaBtn();
+  refreshPtanaList();
+}
+
+function selectPtanaCategory(cat, btn) {
+  ptanaState.category = cat;
+  ptanaState.partCode = '';
+  ptanaState.partName = '';
+  ptanaState.skuGroup = '';
+  document.querySelectorAll('#ptana-category-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('ptana-search-section').style.display = '';
+  document.getElementById('ptana-qty-section').style.display = 'none';
+  const input = document.getElementById('ptana-search-input');
+  if (input) input.value = '';
+  renderPtanaPartList();
+  updatePtanaBtn();
+}
+
+function renderPtanaPartList() {
+  const listEl = document.getElementById('ptana-part-list');
+  if (!listEl || !ptanaState.category) return;
+  const searchEl = document.getElementById('ptana-search-input');
+  const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+  const items = PARTS_CODE_MASTER.filter(p => {
+    if (p.category !== ptanaState.category) return false;
+    if (!q) return true;
+    const hay = (p.partCode + ' ' + p.partNames.join(' ') + ' ' + p.skuGroup).toLowerCase();
+    return hay.includes(q);
+  });
+  if (items.length === 0) {
+    listEl.innerHTML = '<div class="no-data">該当するパーツがありません</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  items.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'material-list-item';
+    const nameLabel = p.partNames.join(' / ');
+    const skuLabel = p.skuGroup ? ` <span style="color:#86868b; font-size:11px;">（${p.skuGroup}）</span>` : '';
+    item.innerHTML = `<span style="font-weight:600;">${p.partCode}</span> ${nameLabel}${skuLabel}`;
+    if (ptanaState.partCode === p.partCode) item.classList.add('selected');
+    item.onclick = () => selectPtanaPart(p);
+    listEl.appendChild(item);
+  });
+}
+
+function findLatestPtanaRecord(partCode) {
+  let latest = null;
+  state.records.forEach(r => {
+    if (r.type !== 'パーツ棚卸し') return;
+    if (r.partCode !== partCode) return;
+    if (!latest || r.date > latest.date) latest = r;
+  });
+  return latest;
+}
+
+function selectPtanaPart(p) {
+  ptanaState.partCode = p.partCode;
+  ptanaState.partName = p.partNames.join(' / ');
+  ptanaState.skuGroup = p.skuGroup;
+  renderPtanaPartList();
+
+  document.getElementById('ptana-qty-label').textContent = `${p.partCode} ${ptanaState.partName} の在庫数`;
+  const info = document.getElementById('ptana-current-info');
+  const latest = findLatestPtanaRecord(p.partCode);
+  info.textContent = latest ? `現在の棚卸し: ${latest.quantity || 0} / ${fmtDate(latest.date)}` : '（まだ棚卸し記録はありません）';
+
+  document.getElementById('ptana-qty-input').value = '0';
+  document.getElementById('ptana-qty-section').style.display = '';
+  updatePtanaBtn();
+}
+
+function changePtanaQty(delta) {
+  const el = document.getElementById('ptana-qty-input');
+  el.value = Math.max(0, (parseInt(el.value) || 0) + delta);
+  updatePtanaBtn();
+}
+
+function updatePtanaBtn() {
+  const btn = document.getElementById('ptana-submit-btn');
+  if (!ptanaState.category) {
+    btn.textContent = 'カテゴリを選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else if (!ptanaState.partCode) {
+    btn.textContent = 'パーツを選んでください';
+    btn.className = 'submit-btn not-ready';
+  } else {
+    const qty = parseInt(document.getElementById('ptana-qty-input').value) || 0;
+    btn.textContent = `パーツ棚卸しを登録する ✅ ${ptanaState.partCode} ${qty}`;
+    btn.className = 'submit-btn ready';
+  }
+}
+
+function submitPtanaoroshi() {
+  if (!ptanaState.category || !ptanaState.partCode) return;
+  const qty = parseInt(document.getElementById('ptana-qty-input').value) || 0;
+  const record = {
+    date: new Date().toISOString(),
+    type: 'パーツ棚卸し',
+    category: ptanaState.category,
+    partCode: ptanaState.partCode,
+    partName: ptanaState.partName,
+    skuGroup: ptanaState.skuGroup,
+    quantity: qty
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  document.getElementById('ptana-qty-section').style.display = 'none';
+  ptanaState.partCode = '';
+  ptanaState.partName = '';
+  ptanaState.skuGroup = '';
+  renderPtanaPartList();
+  updatePtanaBtn();
+  refreshPtanaList();
+}
+
+function refreshPtanaList() {
+  const el = document.getElementById('ptana-registered-list');
+  if (!el) return;
+  const recs = state.records.filter(r => r.type === 'パーツ棚卸し');
+  if (recs.length === 0) {
+    el.innerHTML = '<div class="no-data">パーツ棚卸しデータはまだありません</div>';
+    return;
+  }
+  const sorted = [...recs].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
+  el.innerHTML = sorted.map(r => {
+    return `<div class="alert-card" style="padding:10px 16px;">
+      <div class="alert-title" style="font-size:14px;">${r.partCode} ${r.partName || ''}</div>
+      <div class="alert-detail">${r.quantity || 0} / ${fmtDate(r.date)}</div>
+    </div>`;
+  }).join('');
+}
+
 // showScreenに設定画面と棚卸し画面のリフレッシュを追加
 const _showScreenV2 = showScreen;
 showScreen = function(id) {
   _showScreenV2(id);
   if (id === 'screen-settings') refreshSettingsInfo();
   if (id === 'screen-tanaoroshi') initTanaoroshi();
+  if (id === 'screen-parts-tanaoroshi') initPtanaoroshi();
   if (id === 'screen-record-list') initRecordList();
 };
 
@@ -6132,6 +6328,237 @@ function generateAllSKUs() {
 // ===== 14-column 全体管理テーブル =====
 // 材料信号: パーツ在庫と生産目標を照合
 const CATEGORY_LABELS_MAT = { 'FA': '表地', 'FB': '裏地', 'FC': 'ポケット', 'H': 'テープ', 'B': '副資材' };
+
+// ===== パーツ棚卸し用マスタ（03_製造/マスターデータ/パーツマスター - マスターFA/FB/FC/H/B.csv から生成） =====
+const PARTS_CODE_MASTER = [
+  { category: "FA", partCode: "FA001", partNames: ["709Z_74*49_RD"], skuGroup: "LBL/LBL_NAME" },
+  { category: "FA", partCode: "FA002", partNames: ["709Z_74*49_MU"], skuGroup: "LBL/LBL_NAME" },
+  { category: "FA", partCode: "FA003", partNames: ["709Z_74*49_BE"], skuGroup: "LBL/LBL_NAME" },
+  { category: "FA", partCode: "FA004", partNames: ["709Z_74*49_BR"], skuGroup: "LBL/LBL_NAME" },
+  { category: "FA", partCode: "FA005", partNames: ["709Z_74*49_BL"], skuGroup: "LBL/LBL_NAME" },
+  { category: "FA", partCode: "FA006", partNames: ["709Z_74*49_NA"], skuGroup: "LBL/LBL_NAME" },
+  { category: "FA", partCode: "FA007", partNames: ["709Z_63.5*44_RD"], skuGroup: "LBM/LBM_NAME" },
+  { category: "FA", partCode: "FA008", partNames: ["709Z_63.5*44_MU"], skuGroup: "LBM/LBM_NAME" },
+  { category: "FA", partCode: "FA009", partNames: ["709Z_63.5*44_BE"], skuGroup: "LBM/LBM_NAME" },
+  { category: "FA", partCode: "FA010", partNames: ["709Z_63.5*44_BR"], skuGroup: "LBM/LBM_NAME" },
+  { category: "FA", partCode: "FA011", partNames: ["709Z_63.5*44_BL"], skuGroup: "LBM/LBM_NAME" },
+  { category: "FA", partCode: "FA012", partNames: ["709Z_63.5*44_NA"], skuGroup: "LBM/LBM_NAME" },
+  { category: "FA", partCode: "FA013", partNames: ["709Z_53*38_RD"], skuGroup: "LBS/LBS_NAME" },
+  { category: "FA", partCode: "FA014", partNames: ["709Z_53*38_MU"], skuGroup: "LBS/LBS_NAME" },
+  { category: "FA", partCode: "FA015", partNames: ["709Z_53*38_BE"], skuGroup: "LBS/LBS_NAME" },
+  { category: "FA", partCode: "FA016", partNames: ["709Z_53*38_BR"], skuGroup: "LBS/LBS_NAME" },
+  { category: "FA", partCode: "FA017", partNames: ["709Z_53*38_BL"], skuGroup: "LBS/LBS_NAME" },
+  { category: "FA", partCode: "FA018", partNames: ["709Z_53*38_NA"], skuGroup: "LBS/LBS_NAME" },
+  { category: "FA", partCode: "FA019", partNames: ["709Z_53*28_RD"], skuGroup: "LBSS/LBSS_NAME" },
+  { category: "FA", partCode: "FA020", partNames: ["709Z_53*28_MU"], skuGroup: "LBSS/LBSS_NAME" },
+  { category: "FA", partCode: "FA021", partNames: ["709Z_53*28_BE"], skuGroup: "LBSS/LBSS_NAME" },
+  { category: "FA", partCode: "FA022", partNames: ["709Z_53*28_BR"], skuGroup: "LBSS/LBSS_NAME" },
+  { category: "FA", partCode: "FA023", partNames: ["709Z_53*28_BL"], skuGroup: "LBSS/LBSS_NAME" },
+  { category: "FA", partCode: "FA024", partNames: ["709Z_53*28_NA"], skuGroup: "LBSS/LBSS_NAME" },
+  { category: "FA", partCode: "FA025", partNames: ["11hanpu_73*26.5_BK"], skuGroup: "SBDL" },
+  { category: "FA", partCode: "FA026", partNames: ["11hanpu_73*26.5_BL"], skuGroup: "SBDL" },
+  { category: "FA", partCode: "FA027", partNames: ["11hanpu_73*26.5_BR"], skuGroup: "SBDL" },
+  { category: "FA", partCode: "FA028", partNames: ["11hanpu_73*26.5_KH"], skuGroup: "SBDL" },
+  { category: "FA", partCode: "FA029", partNames: ["11hanpu_73*26.5_OR"], skuGroup: "SBDL" },
+  { category: "FA", partCode: "FA030", partNames: ["11hanpu_73*26.5_SP"], skuGroup: "SBDL" },
+  { category: "FA", partCode: "FA031", partNames: ["11hanpu_63*23_BK"], skuGroup: "SBDM" },
+  { category: "FA", partCode: "FA032", partNames: ["11hanpu_63*23_BL"], skuGroup: "SBDM" },
+  { category: "FA", partCode: "FA033", partNames: ["11hanpu_63*23_BR"], skuGroup: "SBDM" },
+  { category: "FA", partCode: "FA034", partNames: ["11hanpu_63*23_KH"], skuGroup: "SBDM" },
+  { category: "FA", partCode: "FA035", partNames: ["11hanpu_63*23_OR"], skuGroup: "SBDM" },
+  { category: "FA", partCode: "FA036", partNames: ["11hanpu_63*23_SP"], skuGroup: "SBDM" },
+  { category: "FA", partCode: "FA037", partNames: ["80300_93*31.5_BK"], skuGroup: "SBL" },
+  { category: "FA", partCode: "FA038", partNames: ["80300_93*31.5_BL"], skuGroup: "SBL" },
+  { category: "FA", partCode: "FA039", partNames: ["80300_93*31.5_BE"], skuGroup: "SBL" },
+  { category: "FA", partCode: "FA040", partNames: ["77300_93*61.5_PK"], skuGroup: "SBL" },
+  { category: "FA", partCode: "FA041", partNames: ["77300_93*61.5_GY"], skuGroup: "SBL" },
+  { category: "FA", partCode: "FA042", partNames: ["77300_93*61.5_LA"], skuGroup: "SBL" },
+  { category: "FA", partCode: "FA043", partNames: ["80300_76*24_BK"], skuGroup: "SBM" },
+  { category: "FA", partCode: "FA044", partNames: ["80300_76*24_BL"], skuGroup: "SBM" },
+  { category: "FA", partCode: "FA045", partNames: ["80300_76*24_BE"], skuGroup: "SBM" },
+  { category: "FA", partCode: "FA046", partNames: ["77300_76*24_PK"], skuGroup: "SBM" },
+  { category: "FA", partCode: "FA047", partNames: ["77300_76*24_GY"], skuGroup: "SBM" },
+  { category: "FA", partCode: "FA048", partNames: ["77300_76*24_LA"], skuGroup: "SBM" },
+  { category: "FA", partCode: "FA049", partNames: ["80300_103*37.5_BK"], skuGroup: "TAL" },
+  { category: "FA", partCode: "FA050", partNames: ["80300_103*37.5_BL"], skuGroup: "TAL" },
+  { category: "FA", partCode: "FA051", partNames: ["80300_103*37.5_BE"], skuGroup: "TAL" },
+  { category: "FA", partCode: "FA052", partNames: ["77300_103*37.5_PK"], skuGroup: "TAL" },
+  { category: "FA", partCode: "FA053", partNames: ["77300_103*37.5_GY"], skuGroup: "TAL" },
+  { category: "FA", partCode: "FA054", partNames: ["77300_103*37.5_LA"], skuGroup: "TAL" },
+  { category: "FA", partCode: "FA055", partNames: ["80300_83*32_BK"], skuGroup: "OMM/TAM" },
+  { category: "FA", partCode: "FA056", partNames: ["80300_83*32_BL"], skuGroup: "TAM" },
+  { category: "FA", partCode: "FA057", partNames: ["80300_83*32_BE"], skuGroup: "TAM" },
+  { category: "FA", partCode: "FA058", partNames: ["77300_83*32_PK"], skuGroup: "TAM" },
+  { category: "FA", partCode: "FA059", partNames: ["77300_83*32_GY"], skuGroup: "OMM/TAM" },
+  { category: "FA", partCode: "FA060", partNames: ["77300_83*32_LA"], skuGroup: "TAM" },
+  { category: "FA", partCode: "FA061", partNames: ["麻混ST_72*29.5"], skuGroup: "APM" },
+  { category: "FA", partCode: "FA062", partNames: ["80200_72*29.5_WH"], skuGroup: "APM" },
+  { category: "FA", partCode: "FA063", partNames: ["80200_56*24_BK"], skuGroup: "APS/CL/DO/KM" },
+  { category: "FA", partCode: "FA064", partNames: ["80200_56*24_GY"], skuGroup: "APS/CL/DO/KM" },
+  { category: "FA", partCode: "FA065", partNames: ["80200_56*24_WH"], skuGroup: "APS/KM" },
+  { category: "FA", partCode: "FA066", partNames: ["80200_56*24_BE"], skuGroup: "DO/KM" },
+  { category: "FA", partCode: "FA067", partNames: ["BST_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA068", partNames: ["RST_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA069", partNames: ["GCHE_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA070", partNames: ["HAT_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA071", partNames: ["DOT_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA072", partNames: ["FL_W_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA073", partNames: ["FL_B_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA074", partNames: ["CAT_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA075", partNames: ["LURE_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA076", partNames: ["KABUTO_W_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA077", partNames: ["KABUTO_B_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA078", partNames: ["REX_BE_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA079", partNames: ["REX_BK_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA080", partNames: ["REX_MN_56*24"], skuGroup: "KM" },
+  { category: "FA", partCode: "FA081", partNames: ["80200_55*18.5_GY"], skuGroup: "HA" },
+  { category: "FA", partCode: "FA082", partNames: ["80200_55*18.5_BE"], skuGroup: "HA" },
+  { category: "FA", partCode: "FA083", partNames: ["80200_55*18.5_BK"], skuGroup: "HA" },
+  { category: "FA", partCode: "FA084", partNames: ["80200_55*18.5_WH"], skuGroup: "HA" },
+  { category: "FA", partCode: "FA085", partNames: ["80200_45*19.5_GY"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA086", partNames: ["80200_45*19.5_BE"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA087", partNames: ["80200_45*19.5_BK"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA088", partNames: ["80200_45*19.5_WH"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA089", partNames: ["BST_45*19.5"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA090", partNames: ["RST_45*19.5"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA091", partNames: ["DOT_45*19.5"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA092", partNames: ["FL_W_45*19.5"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA093", partNames: ["FL_B_45*19.5"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA094", partNames: ["CAT_45*19.5"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA095", partNames: ["LURE_45*19.5"], skuGroup: "CUP" },
+  { category: "FA", partCode: "FA096", partNames: ["11264_31*17"], skuGroup: "MASK" },
+  { category: "FA", partCode: "FA097", partNames: ["11264_31*21"], skuGroup: "MASK" },
+  { category: "FA", partCode: "FA098", partNames: ["41033_146*42_KH"], skuGroup: "SNAP" },
+  { category: "FA", partCode: "FA099", partNames: ["41033_146*42_NA"], skuGroup: "SNAP" },
+  { category: "FA", partCode: "FA100", partNames: ["701_102*42_BL"], skuGroup: "PNAP" },
+  { category: "FA", partCode: "FA101", partNames: ["701_102*42_BE"], skuGroup: "PNAP" },
+  { category: "FA", partCode: "FA102", partNames: ["701_102*42_OR"], skuGroup: "PNAP" },
+  { category: "FA", partCode: "FA103", partNames: ["701_102*42_PK"], skuGroup: "PNAP" },
+  { category: "FA", partCode: "FA104", partNames: ["11264_74*49"], skuGroup: "IBL" },
+  { category: "FA", partCode: "FA105", partNames: ["11264_63.5*44"], skuGroup: "IBM" },
+  { category: "FA", partCode: "FA106", partNames: ["11264_53*28"], skuGroup: "IBSS" },
+  { category: "FA", partCode: "FA107", partNames: ["709Z_RD_a"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA108", partNames: ["709Z_RD_b"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA109", partNames: ["709Z_MU_a"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA110", partNames: ["709Z_MU_b"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA111", partNames: ["709Z_BE_a"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA112", partNames: ["709Z_BE_b"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA113", partNames: ["709Z_BR_a"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA114", partNames: ["709Z_BR_b"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA115", partNames: ["709Z_BL_a"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA116", partNames: ["709Z_BL_b"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA117", partNames: ["709Z_NA_a"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA118", partNames: ["709Z_NA_b"], skuGroup: "TP" },
+  { category: "FA", partCode: "FA119", partNames: ["210_63.5*44_AP"], skuGroup: "FBM" },
+  { category: "FA", partCode: "FA120", partNames: ["210_63.5*44_BL"], skuGroup: "FBM" },
+  { category: "FA", partCode: "FA121", partNames: ["210_63.5*44_LE"], skuGroup: "FBM" },
+  { category: "FA", partCode: "FA122", partNames: ["709Z_74*49_SB"], skuGroup: "LBL" },
+  { category: "FA", partCode: "FA123", partNames: ["709Z_74*49_GY"], skuGroup: "LBL" },
+  { category: "FA", partCode: "FA124", partNames: ["709Z_63.5*44_SB"], skuGroup: "LBM" },
+  { category: "FA", partCode: "FA125", partNames: ["709Z_63.5*44_GY"], skuGroup: "LBM" },
+  { category: "FA", partCode: "FA126", partNames: ["709Z_53*38_SB"], skuGroup: "LBS" },
+  { category: "FA", partCode: "FA127", partNames: ["709Z_53*38_GY"], skuGroup: "LBS" },
+  { category: "FA", partCode: "FA128", partNames: ["709Z_53*28_SB"], skuGroup: "LBSS" },
+  { category: "FA", partCode: "FA129", partNames: ["709Z_53*28_GY"], skuGroup: "LBSS" },
+  { category: "FA", partCode: "FA130", partNames: ["709Z_74*49_BK"], skuGroup: "LBL" },
+  { category: "FA", partCode: "FA131", partNames: ["709Z_63.5*44_BK"], skuGroup: "LBM" },
+  { category: "FA", partCode: "FA132", partNames: ["709Z_53*38_BK"], skuGroup: "LBS" },
+  { category: "FA", partCode: "FA133", partNames: ["709Z_53*28_BK"], skuGroup: "LBSS" },
+  { category: "FB", partCode: "FB001", partNames: ["769_74*49"], skuGroup: "IBL/LBL" },
+  { category: "FB", partCode: "FB002", partNames: ["769_63.5*44"], skuGroup: "IBM/LBM" },
+  { category: "FB", partCode: "FB003", partNames: ["769_53*38"], skuGroup: "LBS" },
+  { category: "FB", partCode: "FB004", partNames: ["769_53*28"], skuGroup: "IBSS/LBSS" },
+  { category: "FB", partCode: "FB005", partNames: ["713Z_73*26.5"], skuGroup: "SBDL" },
+  { category: "FB", partCode: "FB006", partNames: ["713Z_63*23"], skuGroup: "SBDM" },
+  { category: "FB", partCode: "FB007", partNames: ["713Z_73*31.5"], skuGroup: "SBL" },
+  { category: "FB", partCode: "FB008", partNames: ["713Z_56*24"], skuGroup: "SBM" },
+  { category: "FB", partCode: "FB009", partNames: ["713Z_83*37.5"], skuGroup: "TAL" },
+  { category: "FB", partCode: "FB010", partNames: ["713Z_63*32"], skuGroup: "OMM/TAM" },
+  { category: "FB", partCode: "FB011", partNames: ["713Z_72*29.5"], skuGroup: "APM" },
+  { category: "FB", partCode: "FB012", partNames: ["713Z_48*24"], skuGroup: "APS/CL/DO" },
+  { category: "FB", partCode: "FB013", partNames: ["stripe_48*24"], skuGroup: "KM" },
+  { category: "FB", partCode: "FB014", partNames: ["WH_48*24"], skuGroup: "KM" },
+  { category: "FB", partCode: "FB015", partNames: ["stripe_47*18.5"], skuGroup: "HA" },
+  { category: "FB", partCode: "FB016", partNames: ["stripe_37*19.5"], skuGroup: "CUP" },
+  { category: "FB", partCode: "FB017", partNames: ["WH_37*19.5"], skuGroup: "CUP" },
+  { category: "FB", partCode: "FB018", partNames: ["713Z_93*42"], skuGroup: "PNAP/SNAP" },
+  { category: "FB", partCode: "FB019", partNames: ["da18_63.5*44"], skuGroup: "FBM" },
+  { category: "FB", partCode: "FB020", partNames: ["769fb_74*49"], skuGroup: "FBOL" },
+  { category: "FC", partCode: "FC001", partNames: ["709Z_LBpocket_LM"], skuGroup: "LBL/LBL_NAME/LBM/LBM_NAME" },
+  { category: "FC", partCode: "FC002", partNames: ["709Z_LBpocket_S"], skuGroup: "LBS/LBS_NAME" },
+  { category: "FC", partCode: "FC003", partNames: ["709Z_LBpocket_SS"], skuGroup: "LBSS/LBSS_NAME" },
+  { category: "FC", partCode: "FC004", partNames: ["709Z_PNAPpocket_BK"], skuGroup: "PNAP" },
+  { category: "FC", partCode: "FC005", partNames: ["701_PNAPpocket_BL"], skuGroup: "PNAP" },
+  { category: "FC", partCode: "FC006", partNames: ["701_PNAPpocket_BE"], skuGroup: "PNAP" },
+  { category: "FC", partCode: "FC007", partNames: ["701_PNAPpocket_OR"], skuGroup: "PNAP" },
+  { category: "FC", partCode: "FC008", partNames: ["701_PNAPpocket_PK"], skuGroup: "PNAP" },
+  { category: "FC", partCode: "FC009", partNames: ["769_IBpocket_LM"], skuGroup: "IBL/IBM" },
+  { category: "FC", partCode: "FC010", partNames: ["769_IBpocket_SS"], skuGroup: "IBSS" },
+  { category: "FC", partCode: "FC011", partNames: ["da18_FBMpocket"], skuGroup: "FBM" },
+  { category: "H", partCode: "H001", partNames: ["30mmbelt_31"], skuGroup: "IBL/IBM/LBL/LBM" },
+  { category: "H", partCode: "H002", partNames: ["30mmbelt_29"], skuGroup: "LBS/SBDL/SBDM" },
+  { category: "H", partCode: "H003", partNames: ["30mmbelt_27"], skuGroup: "IBSS/LBSS" },
+  { category: "H", partCode: "H004", partNames: ["30mmbelt_6"], skuGroup: "SBDL/SBDM" },
+  { category: "H", partCode: "H005", partNames: ["30mmbelt_5.5"], skuGroup: "PNAP/SNAP" },
+  { category: "H", partCode: "H006", partNames: ["30mmbeltheat_31"], skuGroup: "PNAP/SNAP" },
+  { category: "H", partCode: "H007", partNames: ["15mmtape_21"], skuGroup: "OMM/SBL/SBM/TAL/TAM" },
+  { category: "H", partCode: "H008", partNames: ["15mmtape_5"], skuGroup: "CUP" },
+  { category: "H", partCode: "H009", partNames: ["15mm_ribbon_5"], skuGroup: "PNAP/TP" },
+  { category: "H", partCode: "H010", partNames: ["mixcode_GR_79"], skuGroup: "" },
+  { category: "H", partCode: "H011", partNames: ["mixcode_NA_79"], skuGroup: "" },
+  { category: "H", partCode: "H012", partNames: ["mixcode_BL_79"], skuGroup: "" },
+  { category: "H", partCode: "H013", partNames: ["mixcode_GR_67"], skuGroup: "" },
+  { category: "H", partCode: "H014", partNames: ["mixcode_NA_67"], skuGroup: "" },
+  { category: "H", partCode: "H015", partNames: ["mixcode_BL_67"], skuGroup: "" },
+  { category: "H", partCode: "H016", partNames: ["mixcode_GR_52"], skuGroup: "" },
+  { category: "H", partCode: "H017", partNames: ["mixcode_NA_52"], skuGroup: "" },
+  { category: "H", partCode: "H018", partNames: ["mixcode_BL_52"], skuGroup: "" },
+  { category: "H", partCode: "H019", partNames: ["flatcode_WH_79"], skuGroup: "" },
+  { category: "H", partCode: "H020", partNames: ["flatcode_WH_67"], skuGroup: "OMM" },
+  { category: "H", partCode: "H021", partNames: ["flatcode_WH_52"], skuGroup: "" },
+  { category: "H", partCode: "H022", partNames: ["flatcode_WH_185"], skuGroup: "PNAP" },
+  { category: "H", partCode: "H023", partNames: ["flatcode_BK_185"], skuGroup: "SNAP" },
+  { category: "H", partCode: "H024", partNames: ["blackcode-m_61.5"], skuGroup: "APM" },
+  { category: "H", partCode: "H025", partNames: ["blackcode-s_50"], skuGroup: "APS/CL/DO/KM" },
+  { category: "H", partCode: "H026", partNames: ["blackcode-s_40"], skuGroup: "HA" },
+  { category: "H", partCode: "H027", partNames: ["gom_36"], skuGroup: "CUP" },
+  { category: "H", partCode: "H028", partNames: ["30mmbelt_5000"], skuGroup: "" },
+  { category: "H", partCode: "H029", partNames: ["15mm_ribbon"], skuGroup: "" },
+  { category: "H", partCode: "H030", partNames: ["mixcode_GR_5000"], skuGroup: "" },
+  { category: "H", partCode: "H031", partNames: ["mixcode_NA_5000"], skuGroup: "" },
+  { category: "H", partCode: "H032", partNames: ["mixcode_BL_5000"], skuGroup: "" },
+  { category: "H", partCode: "H033", partNames: ["flatcode_WH_5000"], skuGroup: "" },
+  { category: "H", partCode: "H034", partNames: ["flatcode_BK_5000"], skuGroup: "" },
+  { category: "H", partCode: "H035", partNames: ["blackcode-m_5000"], skuGroup: "" },
+  { category: "H", partCode: "H036", partNames: ["blackcode-s_5000"], skuGroup: "" },
+  { category: "H", partCode: "H037", partNames: ["gom_250"], skuGroup: "" },
+  { category: "H", partCode: "H038", partNames: ["15mmtape_5000"], skuGroup: "" },
+  { category: "H", partCode: "H039", partNames: ["blackcode-L_5000"], skuGroup: "" },
+  { category: "H", partCode: "H040", partNames: ["20mmbelt_5000"], skuGroup: "" },
+  { category: "B", partCode: "B001", partNames: ["TAG_ktkt01"], skuGroup: "IBL/IBM/IBSS/LBL/LBM/LBS/LBSS/PNAP/SBDL/SBDM/SNAP" },
+  { category: "B", partCode: "B002", partNames: ["TAG_onamae"], skuGroup: "APM/APS/CL/CUP/DO/HA/IBL/IBM/IBSS/KM/LBL/LBM/LBS/LBSS/OMM/PNAP/SBDL/SBDM/SBL/SBM/SNAP/TAL/TAM/TP" },
+  { category: "B", partCode: "B003", partNames: ["TAG_whph"], skuGroup: "LBL/LBM/LBS/LBSS" },
+  { category: "B", partCode: "B004", partNames: ["TAG_blank"], skuGroup: "LBL_NAME/LBM_NAME/LBSS_NAME/LBS_NAME" },
+  { category: "B", partCode: "B005", partNames: ["end_L"], skuGroup: "" },
+  { category: "B", partCode: "B006", partNames: ["end_M"], skuGroup: "APM/OMM/SBL/SBM/TAL/TAM" },
+  { category: "B", partCode: "B007", partNames: ["end_S"], skuGroup: "APS/CL/DO/HA/KM" },
+  { category: "B", partCode: "B008", partNames: ["end_bane"], skuGroup: "CUP" },
+  { category: "B", partCode: "B009", partNames: ["kashime_AG"], skuGroup: "OMM/SBL/SBM/TAL/TAM" },
+  { category: "B", partCode: "B010", partNames: ["kashime_SV"], skuGroup: "" },
+  { category: "B", partCode: "B011", partNames: ["snap_BK"], skuGroup: "MASK/PNAP/SNAP/TP" },
+  { category: "B", partCode: "B012", partNames: ["snap_WH"], skuGroup: "PNAP" },
+  { category: "B", partCode: "B013", partNames: ["dkan_30"], skuGroup: "IBL/IBM/IBSS/SBDL/SBDM" },
+  { category: "B", partCode: "B014", partNames: ["dkan_20"], skuGroup: "" },
+  { category: "B", partCode: "B015", partNames: ["nasukan"], skuGroup: "" },
+  { category: "B", partCode: "B016", partNames: ["karabina"], skuGroup: "PNAP" },
+  { category: "B", partCode: "B017", partNames: ["belt_30"], skuGroup: "" },
+  { category: "B", partCode: "B018", partNames: ["TAG_ktkt02"], skuGroup: "TP" },
+  { category: "B", partCode: "B019", partNames: ["snap_deko"], skuGroup: "MASK/PNAP/SNAP/TP" },
+  { category: "B", partCode: "B020", partNames: ["snap_boko"], skuGroup: "MASK/PNAP/SNAP/TP" },
+  { category: "B", partCode: "B021", partNames: ["marukan_fastener_50"], skuGroup: "" },
+  { category: "B", partCode: "B022", partNames: ["marukan_fastener_45"], skuGroup: "" },
+  { category: "B", partCode: "B023", partNames: ["marukan_fastener_40"], skuGroup: "" },
+];
 
 function getMaterialSignal(sku, skuGroup, colorCode, target) {
   if (target <= 0) return { signal: 'blue', label: '―', parts: [] };
