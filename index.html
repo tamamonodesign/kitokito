@@ -288,6 +288,14 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <h1>📋 棚卸し</h1>
     <p class="subtitle">商品×カラーごとに在庫数を入力</p>
 
+    <div class="form-section" style="background:#f0f7ff;">
+      <h3>📥 CSVでまとめて入力</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">SKU一覧をCSVでダウンロードして数を書き込み→アップロードすると、一括で棚卸し登録できます。数が変わった行だけ登録されます。</p>
+      <button class="submit-btn ready" onclick="exportTanaoroshiTemplate()" style="margin-top:0; background:#34c759;">棚卸しCSVをダウンロード</button>
+      <input type="file" id="tanaoroshi-csv-file" accept=".csv" style="display:none;" onchange="importTanaoroshiCSV(event)">
+      <button class="submit-btn ready" onclick="document.getElementById('tanaoroshi-csv-file').click()" style="margin-top:8px; background:#5856d6;">記入したCSVをアップロード</button>
+    </div>
+
     <div class="form-section">
       <h3>商品を選んでください</h3>
       <div class="color-grid" id="tana-product-buttons"></div>
@@ -350,6 +358,14 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <button class="back-btn" onclick="showScreen('screen-settings')">← もどる</button>
     <h1>🧵 パーツ棚卸し</h1>
     <p class="subtitle">裁断済みパーツ・材料の在庫数を入力</p>
+
+    <div class="form-section" style="background:#f0f7ff;">
+      <h3>📥 CSVでまとめて入力</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">パーツ一覧をCSVでダウンロードして数を書き込み→アップロードすると、一括で登録できます（全227パーツ）。数が変わった行だけ登録されます。</p>
+      <button class="submit-btn ready" onclick="exportPtanaoroshiTemplate()" style="margin-top:0; background:#34c759;">パーツ棚卸しCSVをダウンロード</button>
+      <input type="file" id="ptana-csv-file" accept=".csv" style="display:none;" onchange="importPtanaoroshiCSV(event)">
+      <button class="submit-btn ready" onclick="document.getElementById('ptana-csv-file').click()" style="margin-top:8px; background:#5856d6;">記入したCSVをアップロード</button>
+    </div>
 
     <div class="form-section">
       <h3>カテゴリを選んでください</h3>
@@ -2473,13 +2489,23 @@ async function syncFromGAS() {
     state.records = gasRecords;
     localStorage.setItem('kitokito_records', JSON.stringify(state.records));
     showSyncStatus('synced');
-    // 現在表示中のダッシュボードを更新
+    // 現在表示中の画面を更新（他端末での入力を反映）
     const activeScreen = document.querySelector('.container > div:not(.hidden)');
     if (activeScreen) {
       const id = activeScreen.id;
-      if (id === 'screen-dash-megu') refreshMeguDash();
+      if (id === 'screen-dash-megu') {
+        refreshMeguDash();
+        if (currentZentaiTab === 'zentai') refreshZentaiTable();
+        if (currentZentaiTab === 'tanaoroshi-sheet') refreshTanaoroshiSheet();
+        if (currentZentaiTab === 'hanbai') refreshHanbaiSheet();
+        if (currentZentaiTab === 'parts-stock') refreshPartsStock();
+        if (currentZentaiTab === 'fabric-stock') refreshFabricStockTable();
+        if (currentZentaiTab === 'production-target') refreshProductionTarget();
+      }
       if (id === 'screen-dash-mom') refreshMomDash();
       if (id === 'screen-dash-yamada') refreshYamadaDash();
+      if (id === 'screen-tanaoroshi') refreshTanaList();
+      if (id === 'screen-parts-tanaoroshi') refreshPtanaList();
     }
   } else {
     showSyncStatus('offline');
@@ -5518,6 +5544,183 @@ showDashboard = function(role) {
 };
 
 // ===== データ管理（エクスポート/インポート） =====
+// ===== CSV共通ヘルパー =====
+function csvDateStr() {
+  const now = new Date();
+  return now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+}
+
+function downloadCSV(rows, filename) {
+  const bom = '﻿';
+  const csv = bom + rows.map(r => r.map(c => String(c)).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function latestTanaoroshiMap() {
+  const latest = {};
+  state.records.filter(r => r.type === '棚卸し').forEach(r => {
+    const colorCode = (r.color || '').split(' ')[0];
+    const key = r.product + '_' + colorCode;
+    if (!latest[key] || r.date > latest[key].date) latest[key] = r;
+  });
+  return latest;
+}
+
+// ===== 棚卸し：CSV一括入力 =====
+function exportTanaoroshiTemplate() {
+  const allSKUs = generateAllSKUs();
+  const latest = latestTanaoroshiMap();
+  const rows = [['SKU', '商品名', 'カラー', '棚卸し数', 'B品数']];
+  allSKUs.forEach(s => {
+    const l = latest[s.sku];
+    rows.push([s.sku, s.productName, s.colorCode + ' ' + s.colorName, l ? (l.quantity || 0) : 0, l ? (l.bGrade || 0) : 0]);
+  });
+  downloadCSV(rows, 'kitokito_tanaoroshi_template_' + csvDateStr() + '.csv');
+}
+
+function importTanaoroshiCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      let text = e.target.result;
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      const allSKUs = generateAllSKUs();
+      const skuMap = {};
+      allSKUs.forEach(s => { skuMap[s.sku] = s; });
+      const latest = latestTanaoroshiMap();
+
+      const newRecords = [];
+      let skipped = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        const sku = (cols[0] || '').trim();
+        const s = skuMap[sku];
+        if (!s) { if (sku) skipped++; continue; }
+        const qty = parseInt(cols[3]) || 0;
+        const bGrade = parseInt(cols[4]) || 0;
+        const prev = latest[sku];
+        if (prev && (prev.quantity || 0) === qty && (prev.bGrade || 0) === bGrade) continue;
+        newRecords.push({
+          date: new Date().toISOString(),
+          type: '棚卸し',
+          product: s.productCode,
+          productName: s.productName,
+          color: s.colorCode + ' ' + s.colorName,
+          quantity: qty,
+          bGrade: bGrade
+        });
+      }
+
+      if (newRecords.length === 0) {
+        alert('変更のある行がありませんでした。');
+        event.target.value = '';
+        return;
+      }
+      if (!confirm(`${newRecords.length}件のSKUで棚卸し数を更新します。${skipped > 0 ? `（SKUが一致しない行が${skipped}件あり、スキップしました）` : ''}\nよろしいですか？`)) {
+        event.target.value = '';
+        return;
+      }
+
+      state.records.push(...newRecords);
+      localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+      gasPost('bulkAdd', { records: newRecords });
+
+      alert(`棚卸しを ${newRecords.length}件 更新しました。`);
+      refreshTanaList();
+    } catch (err) {
+      alert('CSVの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ===== パーツ棚卸し：CSV一括入力 =====
+function latestPtanaMap() {
+  const latest = {};
+  state.records.filter(r => r.type === 'パーツ棚卸し').forEach(r => {
+    if (!latest[r.partCode] || r.date > latest[r.partCode].date) latest[r.partCode] = r;
+  });
+  return latest;
+}
+
+function exportPtanaoroshiTemplate() {
+  const latest = latestPtanaMap();
+  const rows = [['パーツコード', 'カテゴリ', 'パーツ名', 'SKUグループ', '数量']];
+  PARTS_CODE_MASTER.forEach(p => {
+    const l = latest[p.partCode];
+    rows.push([p.partCode, p.category, p.partNames.join(' / '), p.skuGroup, l ? (l.quantity || 0) : 0]);
+  });
+  downloadCSV(rows, 'kitokito_parts_tanaoroshi_template_' + csvDateStr() + '.csv');
+}
+
+function importPtanaoroshiCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      let text = e.target.result;
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      const partMap = {};
+      PARTS_CODE_MASTER.forEach(p => { partMap[p.partCode] = p; });
+      const latest = latestPtanaMap();
+
+      const newRecords = [];
+      let skipped = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        const partCode = (cols[0] || '').trim();
+        const p = partMap[partCode];
+        if (!p) { if (partCode) skipped++; continue; }
+        const qty = parseInt(cols[4]) || 0;
+        const prev = latest[partCode];
+        if (prev && (prev.quantity || 0) === qty) continue;
+        newRecords.push({
+          date: new Date().toISOString(),
+          type: 'パーツ棚卸し',
+          category: p.category,
+          partCode: p.partCode,
+          partName: p.partNames.join(' / '),
+          skuGroup: p.skuGroup,
+          quantity: qty
+        });
+      }
+
+      if (newRecords.length === 0) {
+        alert('変更のある行がありませんでした。');
+        event.target.value = '';
+        return;
+      }
+      if (!confirm(`${newRecords.length}件のパーツで在庫数を更新します。${skipped > 0 ? `（パーツコードが一致しない行が${skipped}件あり、スキップしました）` : ''}\nよろしいですか？`)) {
+        event.target.value = '';
+        return;
+      }
+
+      state.records.push(...newRecords);
+      localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+      gasPost('bulkAdd', { records: newRecords });
+
+      alert(`パーツ棚卸しを ${newRecords.length}件 更新しました。`);
+      refreshPtanaList();
+    } catch (err) {
+      alert('CSVの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
 function exportData() {
   const data = {
     version: 1,
@@ -6265,7 +6468,9 @@ refreshStockSummary = function() {
 };
 
 // ===== 全体管理ダッシュボード タブ切替 =====
+let currentZentaiTab = 'zentai';
 function switchDashTab(tabId) {
+  currentZentaiTab = tabId;
   document.querySelectorAll('#screen-dash-megu .dash-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('#screen-dash-megu .dash-tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById('dash-tab-' + tabId).classList.add('active');
@@ -7937,6 +8142,12 @@ function refreshProductionTarget() {
 
 // 起動
 init();
+
+// 他端末での入力を早めに反映するため、定期的にスプレッドシートと同期する
+// （画面を開きっぱなしでも自動更新。タブが非表示の間は止めて無駄なリクエストを避ける）
+setInterval(() => {
+  if (!document.hidden) syncFromGAS();
+}, 25000);
 </script>
 </body>
 </html>
