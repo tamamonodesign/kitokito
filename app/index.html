@@ -294,6 +294,10 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <button class="submit-btn ready" onclick="exportTanaoroshiTemplate()" style="margin-top:0; background:#34c759;">棚卸しCSVをダウンロード</button>
       <input type="file" id="tanaoroshi-csv-file" accept=".csv" style="display:none;" onchange="importTanaoroshiCSV(event)">
       <button class="submit-btn ready" onclick="document.getElementById('tanaoroshi-csv-file').click()" style="margin-top:8px; background:#5856d6;">記入したCSVをアップロード</button>
+      <div style="border-top:1px solid #d6e4f5; margin:14px 0 10px;"></div>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">ネクストエンジンからダウンロードした在庫CSVは、そのままアップロードできます（在庫数→棚卸し数、不良在庫数→B品数として読み込みます）。</p>
+      <input type="file" id="ne-csv-file" accept=".csv" style="display:none;" onchange="importNextEngineCSV(event)">
+      <button class="submit-btn ready" onclick="document.getElementById('ne-csv-file').click()" style="margin-top:0; background:#ff9500;">ネクストエンジンCSVを直接アップロード</button>
     </div>
 
     <div class="form-section">
@@ -5641,6 +5645,84 @@ function importTanaoroshiCSV(event) {
     }
   };
   reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ===== ネクストエンジン在庫CSVを直接アップロード =====
+// 商品コード（例: APM-BK）はKITOKITO内部SKU（例: APM_BK）とハイフン/アンダースコアの違いだけなので、
+// productCode + '-' + colorCode で組み立てて対応表を作る
+function decodeCSVFile(buffer) {
+  let text = new TextDecoder('utf-8').decode(buffer);
+  if (text.indexOf('商品コード') === -1) {
+    try {
+      const sjis = new TextDecoder('shift_jis').decode(buffer);
+      if (sjis.indexOf('商品コード') !== -1) text = sjis;
+    } catch (e) { /* shift_jisが使えない環境ではUTF-8のまま */ }
+  }
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  return text;
+}
+
+function importNextEngineCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const text = decodeCSVFile(e.target.result);
+      const delim = text.split('\n')[0].includes('\t') ? '\t' : ',';
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+
+      const allSKUs = generateAllSKUs();
+      const neMap = {};
+      allSKUs.forEach(s => { neMap[s.productCode + '-' + s.colorCode] = s; });
+      const latest = latestTanaoroshiMap();
+
+      const newRecords = [];
+      const skipped = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(delim);
+        const neCode = (cols[0] || '').trim();
+        if (!neCode) continue;
+        const s = neMap[neCode];
+        if (!s) { skipped.push(neCode); continue; }
+        const qty = parseInt(cols[2]) || 0;      // 在庫数
+        const bGrade = parseInt(cols[8]) || 0;   // 不良在庫数
+        const prev = latest[s.sku];
+        if (prev && (prev.quantity || 0) === qty && (prev.bGrade || 0) === bGrade) continue;
+        newRecords.push({
+          date: new Date().toISOString(),
+          type: '棚卸し',
+          product: s.productCode,
+          productName: s.productName,
+          color: s.colorCode + ' ' + s.colorName,
+          quantity: qty,
+          bGrade: bGrade
+        });
+      }
+
+      if (newRecords.length === 0) {
+        alert(`変更のある行がありませんでした。${skipped.length > 0 ? `\n（KITOKITO側に無い商品コードが${skipped.length}件ありました: ${skipped.slice(0,10).join(', ')}${skipped.length>10?' 他':''}）` : ''}`);
+        event.target.value = '';
+        return;
+      }
+      const skipMsg = skipped.length > 0 ? `\n\nKITOKITO側に無い商品コードが${skipped.length}件あり、スキップしました:\n${skipped.slice(0,10).join(', ')}${skipped.length>10?' 他':''}` : '';
+      if (!confirm(`ネクストエンジンのCSVから ${newRecords.length}件 の棚卸し数を更新します。${skipMsg}\n\nよろしいですか？`)) {
+        event.target.value = '';
+        return;
+      }
+
+      state.records.push(...newRecords);
+      localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+      gasPost('bulkAdd', { records: newRecords });
+
+      alert(`棚卸しを ${newRecords.length}件 更新しました。`);
+      refreshTanaList();
+    } catch (err) {
+      alert('CSVの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
   event.target.value = '';
 }
 
