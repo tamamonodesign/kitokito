@@ -5867,7 +5867,6 @@ function exportZentaiCSV() {
     }
   });
 
-  const hanbaiData = calcHanbaiData();
   const targetMap = {};
   if (typeof PRODUCTION_TARGET_DATA !== 'undefined') {
     PRODUCTION_TARGET_DATA.forEach(d => { targetMap[d.pg] = d.target || 0; });
@@ -5892,7 +5891,7 @@ function exportZentaiCSV() {
       const salesDate = r.periodTo || r.date || '';
       if (!tanaDate || salesDate > tanaDate) csvSales += (r.quantity || 0);
     });
-    const hanbai = (hanbaiData.totals[s.sku] || 0) + csvSales;
+    const hanbai = csvSales;
     const stock = a.tanaoroshi + nyukoTotal - hanbai;
     const hasData = target || a.mochidashi || a.nouhin || a.kenpinOk || a.kenpinB || a.kenpinRejected || a.nyukoQty || hanbai;
     if (!hasData) return;
@@ -7177,7 +7176,6 @@ function refreshZentaiTable() {
     }
   });
 
-  const hanbaiData = calcHanbaiData();
   const directSales = getDirectSalesTotals();
 
   // 生産目標データをSKU→target のマップに(生産グループ単位)
@@ -7236,7 +7234,7 @@ function refreshZentaiTable() {
       }
       shoulderSales += (r.shoulderQty || 0); // ショルダー販売は期間問わず全履歴を累計
     });
-    const hanbai = (hanbaiData.totals[s.sku] || 0) + csvSales;
+    const hanbai = csvSales;
 
     // ショルダー加工納品・持ち出し累計
     let shoulderNouhin = 0, shoulderMochidashi = 0;
