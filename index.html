@@ -251,6 +251,15 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <button class="submit-btn ready" onclick="exportData()" style="margin-top:0;">バックアップを保存する</button>
     </div>
 
+    <div class="form-section" style="background:#f0f7ff;">
+      <h3>📥 棚卸しCSVをダウンロード</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">数を書き込んでアップロードするための棚卸しシートをダウンロードします。</p>
+      <div style="display:flex; gap:8px;">
+        <button class="submit-btn ready" onclick="exportTanaoroshiTemplate()" style="margin-top:0; background:#34c759;">商品在庫CSV</button>
+        <button class="submit-btn ready" onclick="exportPtanaoroshiTemplate()" style="margin-top:0; background:#34c759;">パーツ在庫CSV</button>
+      </div>
+    </div>
+
     <div class="form-section">
       <h3>📋 棚卸し（在庫の一括登録）</h3>
       <p style="font-size:13px; color:#86868b; margin-bottom:12px;">現在の在庫数を商品×カラーごとに登録できます。</p>
