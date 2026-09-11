@@ -289,6 +289,151 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       <p style="font-size:13px; color:#86868b; margin-bottom:12px;">Googleスプレッドシートとデータを同期します。</p>
       <button class="submit-btn ready" onclick="syncFromGAS().then(() => refreshSettingsInfo())" style="margin-top:0; background:#0071e3;">スプレッドシートから同期</button>
     </div>
+
+    <div class="form-section" style="background:#eef6ff;">
+      <h3>🏷️ 商品・パーツ管理</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">新製品の登録・SKU一覧の修正・パーツの登録ができます。</p>
+      <button class="submit-btn ready" onclick="showScreen('screen-sku-manage')" style="margin-top:0; background:#5856d6;">商品・パーツ管理を開く</button>
+    </div>
+  </div>
+
+  <!-- ========== 商品・パーツ管理 ========== -->
+  <div id="screen-sku-manage" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-settings')">← もどる</button>
+    <h1>🏷️ 商品・パーツ管理</h1>
+    <p class="subtitle">新製品登録・SKU修正・パーツ登録</p>
+
+    <div class="form-section">
+      <h3>📋 SKU一覧</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">登録済みの商品を確認・修正します。</p>
+      <button class="submit-btn ready" onclick="renderSkuList(); showScreen('screen-sku-list');" style="margin-top:0;">SKU一覧を見る</button>
+    </div>
+
+    <div class="form-section">
+      <h3>➕ 新製品を登録</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">新しい商品コード・名前・カラーなどを登録します。</p>
+      <button class="submit-btn ready" onclick="openSkuEdit(null)" style="margin-top:0; background:#34c759;">新製品を登録する</button>
+    </div>
+
+    <div class="form-section">
+      <h3>🧵 パーツを登録</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">棚卸し・材料発注で使う新しいパーツコードを登録します。</p>
+      <button class="submit-btn ready" onclick="openPartsAdd()" style="margin-top:0; background:#ff9500;">パーツを登録する</button>
+    </div>
+  </div>
+
+  <div id="screen-sku-list" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-sku-manage')">← もどる</button>
+    <h1>📋 SKU一覧</h1>
+    <p class="subtitle">タップして修正できます</p>
+    <div id="sku-list-body"></div>
+  </div>
+
+  <div id="screen-sku-edit" class="hidden">
+    <button class="back-btn" onclick="showScreen(skuEditState.returnTo)">← もどる</button>
+    <h1 id="sku-edit-title">➕ 新製品を登録</h1>
+
+    <div class="form-section">
+      <div style="margin-bottom:14px;">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">商品コード（英数字、例：LB）</div>
+        <input type="text" id="sku-edit-code" style="width:100%; padding:10px; font-size:16px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">商品名</div>
+        <input type="text" id="sku-edit-name" style="width:100%; padding:10px; font-size:16px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">画像URL（任意）</div>
+        <input type="text" id="sku-edit-img" style="width:100%; padding:10px; font-size:15px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">サイズ（あれば、カンマ区切り。例：LBL, LBM, LBS, LBSS）</div>
+        <input type="text" id="sku-edit-sizes" placeholder="サイズがなければ空欄でOK" style="width:100%; padding:10px; font-size:15px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">カラー（カンマ区切り。例：RD レッド, BL ブルー）</div>
+        <textarea id="sku-edit-colors" rows="2" style="width:100%; padding:10px; font-size:15px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box; font-family:inherit;"></textarea>
+      </div>
+      <div>
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">パーツ構成（カンマ区切り。例：表地 ×1, 裏地 ×1, お名前タグ ×1）</div>
+        <textarea id="sku-edit-parts" rows="2" style="width:100%; padding:10px; font-size:15px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box; font-family:inherit;"></textarea>
+        <div style="font-size:11px; color:#aeaeb2; margin-top:6px;">※ 裁断で使う色別の詳しいパーツ紐付けは下の「パーツ紐付け」で設定します</div>
+      </div>
+    </div>
+
+    <button class="submit-btn ready" onclick="saveSkuEdit()">保存する</button>
+    <button class="submit-btn" id="sku-edit-delete-btn" onclick="deleteSkuEdit()" style="background:#ff3b30; color:white; display:none;">🗑️ この商品を削除する</button>
+
+    <div class="form-section" id="sku-edit-bom-section" style="display:none;">
+      <h3>🧵 パーツ紐付け</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">裁断で使う色別の詳しいパーツを編集します。</p>
+      <button class="submit-btn ready" onclick="openBomEdit()" style="margin-top:0; background:#ff9500;">パーツ紐付けを編集</button>
+    </div>
+  </div>
+
+  <div id="screen-parts-add" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-sku-manage')">← もどる</button>
+    <h1>🧵 パーツを登録</h1>
+    <div class="form-section">
+      <div style="margin-bottom:14px;">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">カテゴリ</div>
+        <select id="parts-add-category" style="width:100%; padding:10px; font-size:16px; border:1px solid #e5e5ea; border-radius:10px;">
+          <option value="FA">表地</option>
+          <option value="FB">裏地</option>
+          <option value="FC">ポケット</option>
+          <option value="H">テープ・ひも</option>
+          <option value="B">副資材</option>
+        </select>
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">パーツコード（例：FA125）</div>
+        <input type="text" id="parts-add-code" style="width:100%; padding:10px; font-size:16px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">パーツ名（カンマ区切りで複数可。例：709Z_74*49_RD）</div>
+        <textarea id="parts-add-names" rows="2" style="width:100%; padding:10px; font-size:15px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box; font-family:inherit;"></textarea>
+      </div>
+      <div>
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">対象SKUグループ（例：LBL/LBL_NAME）</div>
+        <input type="text" id="parts-add-skugroup" style="width:100%; padding:10px; font-size:15px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box;">
+      </div>
+    </div>
+    <button class="submit-btn ready" onclick="savePartsAdd()">登録する</button>
+  </div>
+
+  <div id="screen-bom-edit" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-sku-edit')">← もどる</button>
+    <h1>🧵 パーツ紐付け</h1>
+    <p class="subtitle" id="bom-edit-subtitle"></p>
+
+    <div class="form-section" id="bom-size-section" style="display:none;">
+      <div style="font-size:13px; color:#86868b; margin-bottom:8px;">対象サイズ</div>
+      <div id="bom-size-buttons" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+    </div>
+
+    <div class="form-section" id="bom-color-section" style="display:none;">
+      <div style="font-size:13px; color:#86868b; margin-bottom:8px;">対象カラー</div>
+      <div id="bom-color-buttons" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+    </div>
+
+    <div class="form-section" id="bom-rows-section" style="display:none;">
+      <h3 id="bom-rows-title"></h3>
+      <div id="bom-rows-list"></div>
+      <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
+        <select id="bom-add-category" style="padding:8px; border:1px solid #e5e5ea; border-radius:8px; font-size:14px;">
+          <option value="FA">表地</option>
+          <option value="FB">裏地</option>
+          <option value="FC">ポケット</option>
+          <option value="H">テープ・ひも</option>
+          <option value="B">副資材</option>
+        </select>
+        <input type="text" id="bom-add-name" placeholder="パーツ名" style="flex:1; min-width:120px; padding:8px; border:1px solid #e5e5ea; border-radius:8px; font-size:14px;">
+        <input type="number" id="bom-add-qty" value="1" min="1" style="width:60px; padding:8px; border:1px solid #e5e5ea; border-radius:8px; font-size:14px;">
+        <button onclick="addBomRow()" style="padding:8px 14px; border:none; background:#34c759; color:white; border-radius:8px; font-size:14px; cursor:pointer;">追加</button>
+      </div>
+    </div>
+
+    <button class="submit-btn ready" id="bom-save-btn" onclick="saveBomEdit()" style="display:none;">この内容で保存する</button>
   </div>
 
   <!-- ========== 棚卸し画面 ========== -->
@@ -2443,6 +2588,8 @@ function init() {
   if (saved) {
     try { state.records = JSON.parse(saved); } catch(e) { state.records = []; }
   }
+  // キャッシュ済みの商品・パーツマスタ上書きを反映（新製品登録等）
+  applyMasterOverrides();
 
   // バックグラウンドでGASから最新データを取得
   syncFromGAS();
@@ -2463,7 +2610,15 @@ function init() {
   });
 
   // 商品グリッド生成
+  renderProductGrid();
+}
+
+// 商品グリッド（内職・パーツ制作の選択画面）を再生成。
+// 新製品登録直後や同期完了後にも呼び、追加した商品をすぐ反映させる。
+function renderProductGrid() {
   const grid = document.getElementById('product-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
   PRODUCTS.forEach(p => {
     const card = document.createElement('div');
     card.className = 'product-card';
@@ -2472,13 +2627,18 @@ function init() {
     grid.appendChild(card);
   });
 
-  // パーツ制作セクション
-  const partsSection = document.createElement('div');
-  partsSection.innerHTML = '<div style="font-size:14px; font-weight:600; color:#86868b; margin:20px 0 10px; border-top:1px solid #e5e5ea; padding-top:16px;">🔧 パーツ制作</div>';
-  grid.parentNode.insertBefore(partsSection, grid.nextSibling);
-  const partsGrid = document.createElement('div');
-  partsGrid.className = 'product-grid';
-  partsSection.appendChild(partsGrid);
+  // パーツ制作セクション（初回のみ作成、以降は中身だけ差し替え）
+  let partsGrid = document.getElementById('parts-product-grid');
+  if (!partsGrid) {
+    const partsSection = document.createElement('div');
+    partsSection.innerHTML = '<div style="font-size:14px; font-weight:600; color:#86868b; margin:20px 0 10px; border-top:1px solid #e5e5ea; padding-top:16px;">🔧 パーツ制作</div>';
+    grid.parentNode.insertBefore(partsSection, grid.nextSibling);
+    partsGrid = document.createElement('div');
+    partsGrid.className = 'product-grid';
+    partsGrid.id = 'parts-product-grid';
+    partsSection.appendChild(partsGrid);
+  }
+  partsGrid.innerHTML = '';
   PARTS_PRODUCTS.forEach(p => {
     const card = document.createElement('div');
     card.className = 'product-card';
@@ -2501,6 +2661,8 @@ async function syncFromGAS() {
     });
     state.records = gasRecords;
     localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+    applyMasterOverrides();
+    renderProductGrid();
     showSyncStatus('synced');
     // 現在表示中の画面を更新（他端末での入力を反映）
     const activeScreen = document.querySelector('.container > div:not(.hidden)');
@@ -6864,6 +7026,302 @@ const PARTS_CODE_MASTER = [
   { category: "B", partCode: "B022", partNames: ["marukan_fastener_45"], skuGroup: "" },
   { category: "B", partCode: "B023", partNames: ["marukan_fastener_40"], skuGroup: "" },
 ];
+
+// ===== 商品・パーツマスタ管理（スプレッドシート上書き） =====
+// PRODUCTS / PARTS_CODE_MASTER / PARTS_MASTER はコード内蔵の初期値。
+// records内の type: 'sku_master' / 'parts_catalog' / 'sku_parts_link' レコード（最新のもの）で
+// 追加・上書き・削除する。GAS側のスキーマ変更は不要（既存の汎用recordsログに乗せるだけ）。
+
+function applyMasterOverrides() {
+  applyProductOverrides();
+  applyPartsCatalogOverrides();
+  applyBomOverrides();
+}
+
+function applyProductOverrides() {
+  const latest = {};
+  state.records.filter(r => r.type === 'sku_master').forEach(r => {
+    if (!latest[r.product] || r.date > latest[r.product].date) latest[r.product] = r;
+  });
+  Object.entries(latest).forEach(([code, r]) => {
+    const idx = PRODUCTS.findIndex(p => p.code === code);
+    if (r.deleted) { if (idx >= 0) PRODUCTS.splice(idx, 1); return; }
+    if (!r.def) return;
+    const def = Object.assign({ code }, r.def);
+    if (idx >= 0) PRODUCTS[idx] = def; else PRODUCTS.push(def);
+  });
+}
+
+function applyPartsCatalogOverrides() {
+  const latest = {};
+  state.records.filter(r => r.type === 'parts_catalog').forEach(r => {
+    if (!latest[r.product] || r.date > latest[r.product].date) latest[r.product] = r;
+  });
+  Object.entries(latest).forEach(([partCode, r]) => {
+    const idx = PARTS_CODE_MASTER.findIndex(p => p.partCode === partCode);
+    if (r.deleted) { if (idx >= 0) PARTS_CODE_MASTER.splice(idx, 1); return; }
+    if (!r.def) return;
+    const def = Object.assign({ partCode }, r.def);
+    if (idx >= 0) PARTS_CODE_MASTER[idx] = def; else PARTS_CODE_MASTER.push(def);
+  });
+}
+
+function applyBomOverrides() {
+  const latest = {};
+  state.records.filter(r => r.type === 'sku_parts_link').forEach(r => {
+    const key = r.product + '|' + (r.color || '*');
+    if (!latest[key] || r.date > latest[key].date) latest[key] = r;
+  });
+  Object.values(latest).forEach(r => {
+    const skuGroup = r.product;
+    const colorKey = r.color || '*';
+    if (!PARTS_MASTER[skuGroup]) PARTS_MASTER[skuGroup] = {};
+    if (r.deleted) { delete PARTS_MASTER[skuGroup][colorKey]; return; }
+    PARTS_MASTER[skuGroup][colorKey] = r.list || [];
+  });
+}
+
+// ===== SKU一覧・新製品登録 =====
+let skuEditState = { code: null, isNew: true, returnTo: 'screen-sku-manage' };
+
+function renderSkuList() {
+  const el = document.getElementById('sku-list-body');
+  const sorted = [...PRODUCTS].sort((a, b) => a.code.localeCompare(b.code));
+  el.innerHTML = sorted.map(p => `
+    <div class="form-section" style="padding:14px 16px; margin-bottom:8px; cursor:pointer;" onclick="openSkuEdit('${p.code}')">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="min-width:0;">
+          <div style="font-weight:600; font-size:15px;">${p.code} <span style="font-weight:400; color:#86868b;">${p.name || ''}</span></div>
+          <div style="font-size:12px; color:#86868b; margin-top:2px;">カラー${(p.colors || []).length}種${p.sizes ? ' / サイズ' + p.sizes.length + '種' : ''}</div>
+        </div>
+        <span style="color:#c7c7cc; flex-shrink:0;">›</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openSkuEdit(code) {
+  const active = document.querySelector('.container > div:not(.hidden)');
+  skuEditState.returnTo = (active && active.id) ? active.id : 'screen-sku-manage';
+  skuEditState.code = code || null;
+  skuEditState.isNew = !code;
+
+  const p = code ? PRODUCTS.find(x => x.code === code) : null;
+  document.getElementById('sku-edit-title').textContent = code ? '✏️ 商品を修正' : '➕ 新製品を登録';
+  document.getElementById('sku-edit-code').value = p ? p.code : '';
+  document.getElementById('sku-edit-code').disabled = !!code;
+  document.getElementById('sku-edit-name').value = p ? (p.name || '') : '';
+  document.getElementById('sku-edit-img').value = p ? (p.img || '') : '';
+  document.getElementById('sku-edit-sizes').value = p && p.sizes ? p.sizes.join(', ') : '';
+  document.getElementById('sku-edit-colors').value = p && p.colors ? p.colors.join(', ') : '';
+  document.getElementById('sku-edit-parts').value = p && p.parts ? p.parts.join(', ') : '';
+  document.getElementById('sku-edit-delete-btn').style.display = code ? '' : 'none';
+  document.getElementById('sku-edit-bom-section').style.display = code ? '' : 'none';
+  showScreen('screen-sku-edit');
+}
+
+function saveSkuEdit() {
+  const code = document.getElementById('sku-edit-code').value.trim().toUpperCase();
+  const name = document.getElementById('sku-edit-name').value.trim();
+  if (!code || !name) { alert('商品コードと商品名は必須です'); return; }
+  if (skuEditState.isNew && PRODUCTS.find(p => p.code === code)) {
+    alert('その商品コードはすでに使われています'); return;
+  }
+  const img = document.getElementById('sku-edit-img').value.trim();
+  const sizes = document.getElementById('sku-edit-sizes').value.split(',').map(s => s.trim()).filter(Boolean);
+  const colors = document.getElementById('sku-edit-colors').value.split(',').map(s => s.trim()).filter(Boolean);
+  const parts = document.getElementById('sku-edit-parts').value.split(',').map(s => s.trim()).filter(Boolean);
+  if (colors.length === 0) { alert('カラーを1つ以上入力してください（例：RD レッド, BL ブルー）'); return; }
+
+  const original = skuEditState.code ? PRODUCTS.find(p => p.code === skuEditState.code) : null;
+  const def = { code, name };
+  if (img) def.img = img;
+  if (sizes.length) def.sizes = sizes;
+  def.colors = colors;
+  if (parts.length) def.parts = parts;
+  // このフォームでは扱わない高度な設定（サイズ別カラー等）は既存の値をそのまま引き継ぐ
+  if (original && original.colorsBySize) def.colorsBySize = original.colorsBySize;
+
+  const record = { date: new Date().toISOString(), type: 'sku_master', product: code, def };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+
+  applyMasterOverrides();
+  renderProductGrid();
+
+  alert((skuEditState.isNew ? '新製品を登録しました：' : '商品を更新しました：') + code);
+  showScreen('screen-sku-list');
+  renderSkuList();
+}
+
+function deleteSkuEdit() {
+  if (!skuEditState.code) return;
+  if (!confirm(skuEditState.code + ' を商品一覧から削除しますか？（過去の在庫記録は消えません）')) return;
+  const record = { date: new Date().toISOString(), type: 'sku_master', product: skuEditState.code, deleted: true };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+  applyMasterOverrides();
+  renderProductGrid();
+  showScreen('screen-sku-list');
+  renderSkuList();
+}
+
+// ===== パーツ登録（棚卸し・材料発注用のパーツコード追加） =====
+function openPartsAdd() {
+  document.getElementById('parts-add-category').value = 'FA';
+  document.getElementById('parts-add-code').value = '';
+  document.getElementById('parts-add-names').value = '';
+  document.getElementById('parts-add-skugroup').value = '';
+  showScreen('screen-parts-add');
+}
+
+function savePartsAdd() {
+  const category = document.getElementById('parts-add-category').value;
+  const partCode = document.getElementById('parts-add-code').value.trim().toUpperCase();
+  const partNames = document.getElementById('parts-add-names').value.split(',').map(s => s.trim()).filter(Boolean);
+  const skuGroup = document.getElementById('parts-add-skugroup').value.trim();
+  if (!partCode || partNames.length === 0) { alert('パーツコードとパーツ名は必須です'); return; }
+  if (PARTS_CODE_MASTER.find(p => p.partCode === partCode)) { alert('そのパーツコードはすでに使われています'); return; }
+
+  const def = { category, partNames, skuGroup };
+  const record = { date: new Date().toISOString(), type: 'parts_catalog', product: partCode, def };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+  applyMasterOverrides();
+
+  alert('パーツを登録しました：' + partCode);
+  showScreen('screen-sku-manage');
+}
+
+// ===== パーツ紐付け（裁断で使う色別のパーツ構成を編集） =====
+// PARTS_MASTERはサイズ展開がある商品では「サイズコード」（LBLなど）単位、
+// サイズがない商品では商品コードそのもの単位で管理されている（SKU一覧の商品コードとは別軸）。
+let bomEditState = { product: null, skuCode: null, colorKey: null, rows: [] };
+
+function openBomEdit() {
+  const productCode = skuEditState.code;
+  if (!productCode) return;
+  const p = PRODUCTS.find(x => x.code === productCode);
+  bomEditState = { product: p, skuCode: null, colorKey: null, rows: [] };
+  document.getElementById('bom-edit-subtitle').textContent = productCode + (p ? ' ' + p.name : '');
+
+  const sizeSection = document.getElementById('bom-size-section');
+  const colorSection = document.getElementById('bom-color-section');
+  if (p && p.sizes && p.sizes.length) {
+    sizeSection.style.display = '';
+    colorSection.style.display = 'none';
+    const sizeWrap = document.getElementById('bom-size-buttons');
+    sizeWrap.innerHTML = '';
+    p.sizes.forEach(sizeCode => {
+      const btn = document.createElement('button');
+      btn.className = 'color-btn';
+      btn.textContent = sizeCode;
+      btn.onclick = () => selectBomSize(sizeCode, btn);
+      sizeWrap.appendChild(btn);
+    });
+  } else {
+    sizeSection.style.display = 'none';
+    selectBomSize(productCode, null);
+  }
+
+  document.getElementById('bom-rows-section').style.display = 'none';
+  document.getElementById('bom-save-btn').style.display = 'none';
+  showScreen('screen-bom-edit');
+}
+
+function selectBomSize(sizeCode, btnEl) {
+  document.querySelectorAll('#bom-size-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  if (btnEl) btnEl.classList.add('selected');
+  bomEditState.skuCode = sizeCode;
+  bomEditState.colorKey = null;
+
+  const colorSection = document.getElementById('bom-color-section');
+  colorSection.style.display = '';
+  const btnWrap = document.getElementById('bom-color-buttons');
+  btnWrap.innerHTML = '';
+  const commonBtn = document.createElement('button');
+  commonBtn.className = 'color-btn';
+  commonBtn.textContent = '共通(全カラー)';
+  commonBtn.onclick = () => selectBomColor('*', commonBtn);
+  btnWrap.appendChild(commonBtn);
+
+  const colors = effectiveColorsForSize(bomEditState.product, sizeCode);
+  colors.forEach(c => {
+    const code = c.split(' ')[0];
+    const btn = document.createElement('button');
+    btn.className = 'color-btn';
+    btn.textContent = c;
+    btn.onclick = () => selectBomColor(code, btn);
+    btnWrap.appendChild(btn);
+  });
+
+  document.getElementById('bom-rows-section').style.display = 'none';
+  document.getElementById('bom-save-btn').style.display = 'none';
+}
+
+function selectBomColor(colorKey, btnEl) {
+  document.querySelectorAll('#bom-color-buttons .color-btn').forEach(b => b.classList.remove('selected'));
+  if (btnEl) btnEl.classList.add('selected');
+  bomEditState.colorKey = colorKey;
+  const existing = (PARTS_MASTER[bomEditState.skuCode] && PARTS_MASTER[bomEditState.skuCode][colorKey]) || [];
+  bomEditState.rows = JSON.parse(JSON.stringify(existing));
+  document.getElementById('bom-rows-title').textContent = bomEditState.skuCode + ' / ' + (colorKey === '*' ? '共通' : colorKey) + ' のパーツ';
+  document.getElementById('bom-rows-section').style.display = '';
+  document.getElementById('bom-save-btn').style.display = '';
+  renderBomRows();
+}
+
+function renderBomRows() {
+  const el = document.getElementById('bom-rows-list');
+  if (bomEditState.rows.length === 0) {
+    el.innerHTML = '<div class="no-data">まだパーツがありません</div>';
+    return;
+  }
+  el.innerHTML = bomEditState.rows.map((r, i) => `
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f2f2f7;">
+      <span style="font-size:11px; color:#86868b; background:#f2f2f7; border-radius:6px; padding:2px 6px; flex-shrink:0;">${CATEGORY_LABELS_MAT[r.category] || r.category}</span>
+      <span style="flex:1; font-size:14px; min-width:0; overflow-wrap:anywhere;">${r.partName}</span>
+      <span style="font-size:13px; color:#86868b; flex-shrink:0;">×${r.quantity}</span>
+      <button onclick="removeBomRow(${i})" style="border:none; background:none; color:#ff3b30; font-size:13px; cursor:pointer; flex-shrink:0;">削除</button>
+    </div>
+  `).join('');
+}
+
+function addBomRow() {
+  const category = document.getElementById('bom-add-category').value;
+  const partName = document.getElementById('bom-add-name').value.trim();
+  const quantity = parseInt(document.getElementById('bom-add-qty').value) || 1;
+  if (!partName) { alert('パーツ名を入力してください'); return; }
+  bomEditState.rows.push({ category, partName, quantity });
+  document.getElementById('bom-add-name').value = '';
+  document.getElementById('bom-add-qty').value = '1';
+  renderBomRows();
+}
+
+function removeBomRow(i) {
+  bomEditState.rows.splice(i, 1);
+  renderBomRows();
+}
+
+function saveBomEdit() {
+  if (!bomEditState.skuCode || !bomEditState.colorKey) { alert('サイズ・カラーを選んでください'); return; }
+  const record = {
+    date: new Date().toISOString(),
+    type: 'sku_parts_link',
+    product: bomEditState.skuCode,
+    color: bomEditState.colorKey,
+    list: bomEditState.rows
+  };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+  applyMasterOverrides();
+  alert('パーツ紐付けを保存しました');
+  showScreen('screen-sku-edit');
+}
 
 function getMaterialSignal(sku, skuGroup, colorCode, target) {
   if (target <= 0) return { signal: 'blue', label: '―', parts: [] };
