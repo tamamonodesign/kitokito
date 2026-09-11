@@ -6321,8 +6321,9 @@ function refreshTanaList() {
     return `<div class="alert-card" style="padding:10px 16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <div style="flex:1; min-width:0;">
-          <div class="alert-title" style="font-size:14px;">${r.product} / ${r.color}</div>
+          <div class="alert-title" style="font-size:14px;">${r.product} / ${r.color}${r.adjustType === 'quick' ? ' <span style="font-size:10px; color:#ff9500; font-weight:600;">在庫調整</span>' : ''}</div>
           <div class="alert-detail">OK:${r.quantity||0} B品:${r.bGrade||0} / ${fmtDate(r.date)}</div>
+          ${r.note ? `<div class="alert-detail" style="color:#86868b;">📝 ${r.note}</div>` : ''}
         </div>
         <button onclick='openEditRecord(${json})' style="background:#f2f2f7; border:none; border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer; color:#007aff; font-weight:600; flex-shrink:0;">✏️修正</button>
       </div>
@@ -7292,7 +7293,8 @@ function refreshZentaiTable() {
       if (shoulderInProcess > 0) parts.push(`加工中${shoulderInProcess}`);
       shoulderBadge = `<div style="font-size:9px; color:#0071e3; font-weight:600; margin-top:1px;">${parts.join(' ')}</div>`;
     }
-    tbody += '<td class="num" style="padding:4px; font-size:12px; ' + stockStyle + '">' + (hasStockData ? stock : '-') + shoulderBadge + '</td>';
+    const colorFull = s.colorCode + ' ' + s.colorName;
+    tbody += '<td class="num" style="padding:4px; font-size:12px; cursor:pointer; ' + stockStyle + '" title="クリックして在庫数を直接修正できます" onclick="editStockCell(this,\'' + s.productCode + '\',\'' + colorFull.replace(/'/g, "&#39;") + '\',' + stock + ')">' + (hasStockData ? stock : '-') + shoulderBadge + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff9500;">' + (bGrade || '-') + '</td>';
     tbody += '<td class="num" style="padding:4px; font-size:11px; color:#ff3b30;">' + (rejected || '-') + '</td>';
     const partsData = encodeURIComponent(JSON.stringify(mat.parts));
@@ -7311,6 +7313,63 @@ function refreshZentaiTable() {
 }
 
 // ===== インライン編集 =====
+
+// 在庫セルをクリックして直接修正（システム移行前の未登録分や棚卸ズレをその場で直す用）
+function editStockCell(td, productCode, colorFull, currentValue) {
+  if (td.querySelector('input')) return;
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.value = currentValue;
+  input.style.width = '48px';
+  input.style.fontSize = '12px';
+  input.style.textAlign = 'right';
+  td.textContent = '';
+  td.appendChild(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+
+  function finish() {
+    if (done) return;
+    done = true;
+    refreshZentaiTable();
+  }
+
+  function save() {
+    if (done) return;
+    const val = parseInt(input.value);
+    if (isNaN(val) || val < 0 || val === currentValue) { finish(); return; }
+
+    const reason = prompt('在庫を ' + currentValue + ' → ' + val + ' に修正します。理由（任意）:', '');
+    if (reason === null) { finish(); return; }
+    done = true;
+
+    const latest = findLatestTanaRecord(productCode, colorFull);
+    const record = {
+      date: new Date().toISOString(),
+      type: '棚卸し',
+      product: productCode,
+      productName: SKU_NAMES[productCode] || '',
+      color: colorFull,
+      quantity: val,
+      bGrade: latest ? (latest.bGrade || 0) : 0,
+      note: reason || '在庫調整（全体管理から直接修正）',
+      adjustType: 'quick'
+    };
+    state.records.push(record);
+    localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+    gasPost('add', { record });
+    refreshZentaiTable();
+  }
+
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(); }
+  });
+}
+
 function editPlanCell(td, sku, field, currentValue) {
   // Already editing
   if (td.querySelector('input')) return;
