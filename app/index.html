@@ -6191,16 +6191,8 @@ function refreshPartsStock() {
     items = items.filter(r => r.category === currentPartsFilter);
   }
 
-  // カテゴリ順 FA→FB→FC→H→B → パーツコード番号順
-  const CAT_ORDER = { 'FA': 0, 'FB': 1, 'FC': 2, 'H': 3, 'B': 4 };
-  items.sort((a, b) => {
-    const catA = CAT_ORDER[a.category] ?? 9;
-    const catB = CAT_ORDER[b.category] ?? 9;
-    if (catA !== catB) return catA - catB;
-    const numA = parseInt((a.partCode || '').replace(/\D/g, '')) || 0;
-    const numB = parseInt((b.partCode || '').replace(/\D/g, '')) || 0;
-    return numA - numB;
-  });
+  // パーツ名の昇順
+  items.sort((a, b) => (a.partName || '').localeCompare(b.partName || '', 'ja'));
 
   const CATEGORY_LABELS = { 'FA': '表地', 'FB': '裏地', 'FC': 'ポケット', 'H': 'ひも・テープ', 'B': '副資材' };
 
