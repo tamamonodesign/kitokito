@@ -6210,10 +6210,14 @@ function refreshPartsStock() {
   items.forEach(r => {
     const catLabel = CATEGORY_LABELS[r.category] || r.category;
     const qtyClass = r.quantity === 0 ? 'color:#ff3b30; font-weight:600;' : '';
+    // SKUグループはパーツ棚卸し記録が作られた時点のものではなく、現在のパーツマスタ（パーツ一覧）の値を優先表示。
+    // 棚卸し記録に埋め込まれた値は棚卸し当時のスナップショットのままで、後からパーツ紐付けを直しても更新されないため。
+    const master = PARTS_CODE_MASTER.find(p => p.category === r.category && p.partCode === r.partCode);
+    const skuGroup = master ? master.skuGroup : r.skuGroup;
     tbody += `<tr>`;
     tbody += `<td style="padding:4px;"><span class="badge ${r.quantity > 0 ? 'green' : 'red'}" style="font-size:10px; padding:1px 4px;">${catLabel}</span></td>`;
     tbody += `<td style="text-align:left; padding:4px;"><div style="font-size:12px; font-weight:600;">${r.partName || ''}</div><div style="font-size:10px; color:#86868b;">${r.partCode || ''}</div></td>`;
-    tbody += `<td style="padding:4px; font-size:10px;">${r.skuGroup || ''}</td>`;
+    tbody += `<td style="padding:4px; font-size:10px;">${skuGroup || ''}</td>`;
     tbody += `<td class="num" style="padding:4px; ${qtyClass}">${r.quantity}</td>`;
     tbody += `</tr>`;
   });
