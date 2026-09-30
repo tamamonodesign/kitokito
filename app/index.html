@@ -316,6 +316,12 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     </div>
 
     <div class="form-section">
+      <h3>📇 パーツ一覧</h3>
+      <p style="font-size:13px; color:#86868b; margin-bottom:12px;">登録済みのパーツを確認・修正します。</p>
+      <button class="submit-btn ready" onclick="renderPartsList(); showScreen('screen-parts-list');" style="margin-top:0;">パーツ一覧を見る</button>
+    </div>
+
+    <div class="form-section">
       <h3>🧵 パーツを登録</h3>
       <p style="font-size:13px; color:#86868b; margin-bottom:12px;">棚卸し・材料発注で使う新しいパーツコードを登録します。</p>
       <button class="submit-btn ready" onclick="openPartsAdd()" style="margin-top:0; background:#ff9500;">パーツを登録する</button>
@@ -372,8 +378,8 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
   </div>
 
   <div id="screen-parts-add" class="hidden">
-    <button class="back-btn" onclick="showScreen('screen-sku-manage')">← もどる</button>
-    <h1>🧵 パーツを登録</h1>
+    <button class="back-btn" onclick="showScreen(partsEditState.returnTo)">← もどる</button>
+    <h1 id="parts-add-title">🧵 パーツを登録</h1>
     <div class="form-section">
       <div style="margin-bottom:14px;">
         <div style="font-size:13px; color:#86868b; margin-bottom:6px;">カテゴリ</div>
@@ -399,6 +405,17 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
       </div>
     </div>
     <button class="submit-btn ready" onclick="savePartsAdd()">登録する</button>
+    <button class="submit-btn" id="parts-add-delete-btn" onclick="deletePartsEdit()" style="background:#ff3b30; color:white; display:none;">🗑️ このパーツを削除する</button>
+  </div>
+
+  <div id="screen-parts-list" class="hidden">
+    <button class="back-btn" onclick="showScreen('screen-sku-manage')">← もどる</button>
+    <h1>📇 パーツ一覧</h1>
+    <p class="subtitle">タップして修正できます（全<span id="parts-list-count"></span>件）</p>
+    <div class="form-section" style="padding:12px 16px;">
+      <input type="text" id="parts-list-search" placeholder="パーツコード・パーツ名・SKUグループで検索" oninput="renderPartsList()" style="width:100%; padding:10px; font-size:15px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box;">
+    </div>
+    <div id="parts-list-body"></div>
   </div>
 
   <div id="screen-bom-edit" class="hidden">
@@ -7168,12 +7185,61 @@ function deleteSkuEdit() {
   renderSkuList();
 }
 
-// ===== パーツ登録（棚卸し・材料発注用のパーツコード追加） =====
-function openPartsAdd() {
-  document.getElementById('parts-add-category').value = 'FA';
-  document.getElementById('parts-add-code').value = '';
-  document.getElementById('parts-add-names').value = '';
-  document.getElementById('parts-add-skugroup').value = '';
+// ===== パーツ一覧・パーツ登録（棚卸し・材料発注用のパーツコード管理） =====
+let partsEditState = { code: null, isNew: true, returnTo: 'screen-sku-manage' };
+
+function renderPartsList() {
+  const el = document.getElementById('parts-list-body');
+  const countEl = document.getElementById('parts-list-count');
+  const q = (document.getElementById('parts-list-search').value || '').trim().toLowerCase();
+
+  let list = [...PARTS_CODE_MASTER];
+  countEl.textContent = list.length;
+  if (q) {
+    list = list.filter(p => {
+      const hay = [p.partCode, (p.partNames || []).join(' '), p.skuGroup, CATEGORY_LABELS_MAT[p.category] || p.category]
+        .join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  list.sort((a, b) => (a.category + a.partCode).localeCompare(b.category + b.partCode));
+
+  if (list.length === 0) {
+    el.innerHTML = '<div class="no-data">該当するパーツがありません</div>';
+    return;
+  }
+
+  el.innerHTML = list.map(p => `
+    <div style="background:white; border-radius:12px; padding:12px 16px; margin-bottom:8px; box-shadow:0 1px 4px rgba(0,0,0,0.06); cursor:pointer;" onclick="openPartsAdd('${p.partCode}')">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="min-width:0;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-size:11px; color:#86868b; background:#f2f2f7; border-radius:6px; padding:2px 6px; flex-shrink:0;">${CATEGORY_LABELS_MAT[p.category] || p.category}</span>
+            <span style="font-weight:600; font-size:14px;">${p.partCode}</span>
+          </div>
+          <div style="font-size:13px; color:#1d1d1f; margin-top:4px; overflow-wrap:anywhere;">${(p.partNames || []).join(', ')}</div>
+          ${p.skuGroup ? `<div style="font-size:11px; color:#86868b; margin-top:2px;">対象: ${p.skuGroup}</div>` : ''}
+        </div>
+        <span style="color:#c7c7cc; flex-shrink:0;">›</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openPartsAdd(partCode) {
+  const active = document.querySelector('.container > div:not(.hidden)');
+  partsEditState.returnTo = (active && active.id) ? active.id : 'screen-sku-manage';
+  partsEditState.code = partCode || null;
+  partsEditState.isNew = !partCode;
+
+  const p = partCode ? PARTS_CODE_MASTER.find(x => x.partCode === partCode) : null;
+  document.getElementById('parts-add-title').textContent = partCode ? '✏️ パーツを修正' : '🧵 パーツを登録';
+  document.getElementById('parts-add-category').value = p ? p.category : 'FA';
+  document.getElementById('parts-add-code').value = p ? p.partCode : '';
+  document.getElementById('parts-add-code').disabled = !!partCode;
+  document.getElementById('parts-add-names').value = p && p.partNames ? p.partNames.join(', ') : '';
+  document.getElementById('parts-add-skugroup').value = p ? (p.skuGroup || '') : '';
+  document.getElementById('parts-add-delete-btn').style.display = partCode ? '' : 'none';
   showScreen('screen-parts-add');
 }
 
@@ -7183,7 +7249,9 @@ function savePartsAdd() {
   const partNames = document.getElementById('parts-add-names').value.split(',').map(s => s.trim()).filter(Boolean);
   const skuGroup = document.getElementById('parts-add-skugroup').value.trim();
   if (!partCode || partNames.length === 0) { alert('パーツコードとパーツ名は必須です'); return; }
-  if (PARTS_CODE_MASTER.find(p => p.partCode === partCode)) { alert('そのパーツコードはすでに使われています'); return; }
+  if (partsEditState.isNew && PARTS_CODE_MASTER.find(p => p.partCode === partCode)) {
+    alert('そのパーツコードはすでに使われています'); return;
+  }
 
   const def = { category, partNames, skuGroup };
   const record = { date: new Date().toISOString(), type: 'parts_catalog', product: partCode, def };
@@ -7192,8 +7260,21 @@ function savePartsAdd() {
   gasPost('add', { record });
   applyMasterOverrides();
 
-  alert('パーツを登録しました：' + partCode);
-  showScreen('screen-sku-manage');
+  alert((partsEditState.isNew ? 'パーツを登録しました：' : 'パーツを更新しました：') + partCode);
+  showScreen('screen-parts-list');
+  renderPartsList();
+}
+
+function deletePartsEdit() {
+  if (!partsEditState.code) return;
+  if (!confirm(partsEditState.code + ' を削除しますか？')) return;
+  const record = { date: new Date().toISOString(), type: 'parts_catalog', product: partsEditState.code, deleted: true };
+  state.records.push(record);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  gasPost('add', { record });
+  applyMasterOverrides();
+  showScreen('screen-parts-list');
+  renderPartsList();
 }
 
 // ===== パーツ紐付け（裁断で使う色別のパーツ構成を編集） =====
