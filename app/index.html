@@ -383,7 +383,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
     <div class="form-section">
       <div style="margin-bottom:14px;">
         <div style="font-size:13px; color:#86868b; margin-bottom:6px;">カテゴリ</div>
-        <select id="parts-add-category" style="width:100%; padding:10px; font-size:16px; border:1px solid #e5e5ea; border-radius:10px;">
+        <select id="parts-add-category" onchange="updatePartsAddCodeSuggestion()" style="width:100%; padding:10px; font-size:16px; border:1px solid #e5e5ea; border-radius:10px;">
           <option value="FA">表地</option>
           <option value="FB">裏地</option>
           <option value="FC">ポケット</option>
@@ -392,7 +392,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
         </select>
       </div>
       <div style="margin-bottom:14px;">
-        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">パーツコード（例：FA125）</div>
+        <div style="font-size:13px; color:#86868b; margin-bottom:6px;">パーツコード（カテゴリから自動入力・必要なら変更可）</div>
         <input type="text" id="parts-add-code" style="width:100%; padding:10px; font-size:16px; border:1px solid #e5e5ea; border-radius:10px; box-sizing:border-box;">
       </div>
       <div style="margin-bottom:14px;">
@@ -7254,6 +7254,24 @@ function renderPartsList() {
   `).join('');
 }
 
+// そのカテゴリで現在使われている最大の連番+1を、ゼロ埋め3桁で返す（例：FA133まであればFA134）
+function nextPartCode(category) {
+  let max = 0;
+  PARTS_CODE_MASTER.forEach(p => {
+    if (p.category !== category) return;
+    const m = /^[A-Z]+([0-9]+)$/.exec(p.partCode || '');
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return category + String(max + 1).padStart(3, '0');
+}
+
+// カテゴリを切り替えたら、新規登録時のみパーツコード候補を自動入力し直す
+function updatePartsAddCodeSuggestion() {
+  if (!partsEditState.isNew) return;
+  const category = document.getElementById('parts-add-category').value;
+  document.getElementById('parts-add-code').value = nextPartCode(category);
+}
+
 function openPartsAdd(partCode) {
   const active = document.querySelector('.container > div:not(.hidden)');
   partsEditState.returnTo = (active && active.id) ? active.id : 'screen-sku-manage';
@@ -7261,9 +7279,10 @@ function openPartsAdd(partCode) {
   partsEditState.isNew = !partCode;
 
   const p = partCode ? PARTS_CODE_MASTER.find(x => x.partCode === partCode) : null;
+  const defaultCategory = p ? p.category : 'FA';
   document.getElementById('parts-add-title').textContent = partCode ? '✏️ パーツを修正' : '🧵 パーツを登録';
-  document.getElementById('parts-add-category').value = p ? p.category : 'FA';
-  document.getElementById('parts-add-code').value = p ? p.partCode : '';
+  document.getElementById('parts-add-category').value = defaultCategory;
+  document.getElementById('parts-add-code').value = p ? p.partCode : nextPartCode(defaultCategory);
   document.getElementById('parts-add-code').disabled = !!partCode;
   document.getElementById('parts-add-names').value = p && p.partNames ? p.partNames.join(', ') : '';
   document.getElementById('parts-add-skugroup').value = p ? (p.skuGroup || '') : '';
