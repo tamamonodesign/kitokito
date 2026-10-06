@@ -1471,6 +1471,151 @@ async function gasPost(action, payload) {
   }
 }
 
+// ===== 端末間で同期するデータ（裁断メモ・縫製発注・生産予定・生地在庫） =====
+// もとは各端末のlocalStorageだけに保存していたため、端末を変えると見えなかった。
+// 商品マスタと同じく records に { type: 'doc_xxx', product: ドキュメントID, doc } を追記し、
+// IDごとに最新の日付のレコードを採用する（GAS側の変更は不要）。
+// GASが落ちていても消えないよう、送信成功するまで kitokito_sync_pending に保持して再送する。
+const SYNCED_COLLECTIONS = {
+  cutting_memo: {
+    type: 'doc_cutting_memo', legacyKey: 'kitokito_cutting_memos',
+    legacyToDocs: raw => Array.isArray(raw) ? Object.fromEntries(raw.map(m => [m.id, m])) : {}
+  },
+  seizo_order: {
+    type: 'doc_seizo_order', legacyKey: 'kitokito_orders',
+    legacyToDocs: raw => Array.isArray(raw) ? Object.fromEntries(raw.map(o => [o.id, o])) : {}
+  },
+  production_plan: {
+    type: 'doc_production_plan', legacyKey: 'kitokito_plans',
+    legacyToDocs: raw => (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {}
+  },
+  fabric_stock: {
+    type: 'doc_fabric_stock', legacyKey: 'kitokito_fabric_stock',
+    // 一度も編集していない（updatedAtが空の）初期値は移行しない
+    legacyToDocs: raw => Array.isArray(raw)
+      ? Object.fromEntries(raw.filter(x => x && x.updatedAt).map(x => [x.id, x])) : {},
+    legacyIsNewer: (legacy, current) => (legacy.updatedAt || '') > (current.updatedAt || '')
+  }
+};
+
+function isSyncedDocRecord(r) {
+  return typeof r.type === 'string' && r.type.indexOf('doc_') === 0;
+}
+
+function loadSyncPending() {
+  try { return JSON.parse(localStorage.getItem('kitokito_sync_pending') || '[]'); }
+  catch(e) { return []; }
+}
+function saveSyncPending(pending) {
+  localStorage.setItem('kitokito_sync_pending', JSON.stringify(pending));
+}
+
+function isLegacyMigrated(name) {
+  return localStorage.getItem('kitokito_migrated_' + name) === '1';
+}
+
+function readLegacyDocs(name) {
+  const col = SYNCED_COLLECTIONS[name];
+  try { return col.legacyToDocs(JSON.parse(localStorage.getItem(col.legacyKey) || 'null')); }
+  catch(e) { return {}; }
+}
+
+// records から最新のドキュメント一覧を { id: doc } で返す
+function latestSyncedDocs(name) {
+  const type = SYNCED_COLLECTIONS[name].type;
+  const latest = {};
+  state.records.forEach(r => {
+    if (r.type !== type) return;
+    if (!latest[r.product] || (r.date || '') >= (latest[r.product].date || '')) latest[r.product] = r;
+  });
+  const docs = {};
+  Object.entries(latest).forEach(([id, r]) => { if (!r.deleted && r.doc) docs[id] = r.doc; });
+  return docs;
+}
+
+function loadSyncedDocs(name) {
+  // 移行前の端末では、手元の旧データを下敷きにして表示が空にならないようにする
+  const base = isLegacyMigrated(name) ? {} : readLegacyDocs(name);
+  // 呼び出し側が書き換えても記録済みレコードに波及しないよう複製して返す
+  return JSON.parse(JSON.stringify(Object.assign(base, latestSyncedDocs(name))));
+}
+
+// changes: [{ id, doc }] または [{ id, deleted: true }]
+function putSyncedDocs(name, changes) {
+  if (changes.length === 0) return;
+  const type = SYNCED_COLLECTIONS[name].type;
+  const now = new Date().toISOString();
+  const recs = changes.map(c => c.deleted
+    ? { date: now, type, product: c.id, deleted: true, syncId: makeSyncId() }
+    : { date: now, type, product: c.id, doc: c.doc, syncId: makeSyncId() });
+  state.records.push(...recs);
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  saveSyncPending([...loadSyncPending(), ...recs]);
+  flushSyncPending();
+}
+
+function makeSyncId() {
+  return Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+// 新しい一覧（{ id: doc }）と現在の内容を比べ、変わったものだけ記録する
+function saveSyncedDocs(name, newDocs) {
+  const current = loadSyncedDocs(name);
+  const changes = [];
+  Object.entries(newDocs).forEach(([id, doc]) => {
+    if (JSON.stringify(current[id]) !== JSON.stringify(doc)) changes.push({ id, doc });
+  });
+  Object.keys(current).forEach(id => {
+    if (!(id in newDocs)) changes.push({ id, deleted: true });
+  });
+  putSyncedDocs(name, changes);
+}
+
+let syncFlushing = false;
+async function flushSyncPending() {
+  if (syncFlushing) return;
+  const pending = loadSyncPending();
+  if (pending.length === 0) return;
+  syncFlushing = true;
+  const res = await gasPost('bulkAdd', { records: pending });
+  syncFlushing = false;
+  if (res && res.success) {
+    const sent = new Set(pending.map(r => r.syncId));
+    const rest = loadSyncPending().filter(r => !sent.has(r.syncId));
+    saveSyncPending(rest);
+    if (rest.length > 0) flushSyncPending();
+  }
+}
+
+// GASから最新を取得した直後に呼ぶ：未送信分を残し、旧localStorageデータを一度だけスプシへ移す
+function reconcileSyncedDocs() {
+  const pending = loadSyncPending();
+  if (pending.length > 0) {
+    const onServer = new Set(state.records.filter(r => r.syncId).map(r => r.syncId));
+    state.records.push(...pending.filter(r => !onServer.has(r.syncId)));
+  }
+
+  Object.entries(SYNCED_COLLECTIONS).forEach(([name, col]) => {
+    if (isLegacyMigrated(name)) return;
+    const legacy = readLegacyDocs(name);
+    const current = latestSyncedDocs(name);
+    // 削除済みも含め、すでに記録があるIDは移行で復活させない
+    const known = new Set(state.records.filter(r => r.type === col.type).map(r => r.product));
+    const changes = [];
+    Object.entries(legacy).forEach(([id, doc]) => {
+      if (!known.has(id) || (current[id] && col.legacyIsNewer && col.legacyIsNewer(doc, current[id]))) {
+        changes.push({ id, doc });
+      }
+    });
+    putSyncedDocs(name, changes);
+    // 旧データはバックアップとしてlocalStorageに残したまま、移行済みの印だけ付ける
+    localStorage.setItem('kitokito_migrated_' + name, '1');
+  });
+
+  localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+  flushSyncPending();
+}
+
 // Show sync status indicator
 function showSyncStatus(status) {
   let el = document.getElementById('sync-status');
@@ -2678,7 +2823,7 @@ async function syncFromGAS() {
       return clean;
     });
     state.records = gasRecords;
-    localStorage.setItem('kitokito_records', JSON.stringify(state.records));
+    reconcileSyncedDocs();
     applyMasterOverrides();
     renderProductGrid();
     showSyncStatus('synced');
@@ -2697,6 +2842,7 @@ async function syncFromGAS() {
       }
       if (id === 'screen-dash-mom') refreshMomDash();
       if (id === 'screen-dash-yamada') refreshYamadaDash();
+      if (id === 'screen-seizo-order') refreshOrderList();
       if (id === 'screen-tanaoroshi') refreshTanaList();
       if (id === 'screen-parts-tanaoroshi') refreshPtanaList();
     }
@@ -4975,7 +5121,7 @@ function refreshRecordList() {
   const productQuery = (document.getElementById('rl-filter-product')?.value || '').trim().toLowerCase();
   recordListState.productFilter = productQuery;
 
-  let recs = state.records.slice();
+  let recs = state.records.filter(r => !isSyncedDocRecord(r));
   if (typeDef && typeDef.types) {
     const allowSet = new Set(typeDef.types);
     recs = recs.filter(r => allowSet.has(r.type));
@@ -5062,12 +5208,12 @@ let orderState = {
 };
 
 function loadOrders() {
-  try { return JSON.parse(localStorage.getItem('kitokito_orders') || '[]'); }
-  catch(e) { return []; }
+  return Object.values(loadSyncedDocs('seizo_order'))
+    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 }
 
 function saveOrders(orders) {
-  localStorage.setItem('kitokito_orders', JSON.stringify(orders));
+  saveSyncedDocs('seizo_order', Object.fromEntries(orders.map(o => [o.id, o])));
 }
 
 // 発注ごとの進捗を自動計算（FIFO：発注作成日順）
@@ -5416,11 +5562,11 @@ function deleteOrder() {
 // --- 山田さんダッシュボード ---
 // ===== 裁断メモ =====
 function loadCuttingMemos() {
-  try { return JSON.parse(localStorage.getItem('kitokito_cutting_memos') || '[]'); }
-  catch(e) { return []; }
+  return Object.values(loadSyncedDocs('cutting_memo'))
+    .sort((a, b) => (a.created || '').localeCompare(b.created || ''));
 }
 function saveCuttingMemos(memos) {
-  localStorage.setItem('kitokito_cutting_memos', JSON.stringify(memos));
+  saveSyncedDocs('cutting_memo', Object.fromEntries(memos.map(m => [m.id, m])));
 }
 
 const CUTTING_STATUSES = [
@@ -6772,13 +6918,10 @@ function switchDashTab(tabId) {
 
 // ===== 生産予定データ (plans) =====
 function loadPlans() {
-  try {
-    const s = localStorage.getItem('kitokito_plans');
-    return s ? JSON.parse(s) : {};
-  } catch(e) { return {}; }
+  return loadSyncedDocs('production_plan');
 }
 function savePlans(plans) {
-  localStorage.setItem('kitokito_plans', JSON.stringify(plans));
+  saveSyncedDocs('production_plan', plans);
 }
 
 // ===== SKU一覧生成 =====
@@ -7588,19 +7731,18 @@ const FABRIC_STOCK_INITIAL = [
 ];
 
 function loadFabricStock() {
-  try {
-    const raw = localStorage.getItem('kitokito_fabric_stock');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch(e) {}
-  // 初期データのコピーを返す
-  return FABRIC_STOCK_INITIAL.map(x => Object.assign({}, x, { updatedAt: '' }));
+  // 初期データに、記録済みの変更を上書きする
+  const docs = loadSyncedDocs('fabric_stock');
+  const items = FABRIC_STOCK_INITIAL.map(x => docs[x.id] || Object.assign({}, x, { updatedAt: '' }));
+  Object.keys(docs).forEach(id => {
+    if (!FABRIC_STOCK_INITIAL.some(x => x.id === id)) items.push(docs[id]);
+  });
+  return items;
 }
 
 function saveFabricStock(items) {
-  localStorage.setItem('kitokito_fabric_stock', JSON.stringify(items));
+  // 編集すると必ず updatedAt が入るので、未編集の初期値は記録しない
+  saveSyncedDocs('fabric_stock', Object.fromEntries(items.filter(x => x.updatedAt).map(x => [x.id, x])));
 }
 
 function fmtFabricDate(s) {
