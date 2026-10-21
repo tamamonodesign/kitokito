@@ -2986,10 +2986,9 @@ function syncQtyFromInput(type) {
   if (type === 'mochidashi') {
     state.quantity = Math.max(1, parseInt(document.getElementById('qty-input').value) || 1);
   } else if (type === 'nouhin') {
-    const max = nouhinState.sourceRecord ? nouhinState.sourceRecord.remaining : 999;
     const v = parseInt(document.getElementById('nouhin-qty-input').value);
     if (isNaN(v)) return; // 入力途中（空欄）は確定時に補正
-    nouhinState.quantity = Math.max(1, Math.min(max, v));
+    nouhinState.quantity = Math.max(1, v);
     if (v !== nouhinState.quantity) document.getElementById('nouhin-qty-input').value = nouhinState.quantity;
     updateNouhinBtn();
   }
@@ -3193,9 +3192,9 @@ function selectNouhinJob(job) {
   showScreen('screen-nouhin-input');
 }
 
+// 残り枚数を超える納品も可（超過時は警告表示＋記録前に確認）
 function changeNouhinQty(delta) {
-  const max = nouhinState.sourceRecord ? nouhinState.sourceRecord.remaining : 999;
-  nouhinState.quantity = Math.max(1, Math.min(max, nouhinState.quantity + delta));
+  nouhinState.quantity = Math.max(1, nouhinState.quantity + delta);
   document.getElementById('nouhin-qty-input').value = nouhinState.quantity;
   updateNouhinBtn();
 }
@@ -3209,9 +3208,14 @@ function updateNouhinBtn() {
   const prefix = isShoulder ? '🔗 ' : '';
   btn.textContent = `納品を記録する ✅ ${prefix}${nouhinState.product.code}${colorText} ×${nouhinState.quantity}${unitText}`;
   btn.className = 'submit-btn ready';
-  const max = nouhinState.sourceRecord ? nouhinState.sourceRecord.remaining : 999;
-  document.getElementById('nouhin-qty-note').textContent =
-    nouhinState.quantity >= max ? `残り${max}${unitText}が上限です` : '';
+  const remaining = nouhinState.sourceRecord ? nouhinState.sourceRecord.remaining : null;
+  const note = document.getElementById('nouhin-qty-note');
+  if (remaining !== null && nouhinState.quantity > remaining) {
+    note.textContent = `⚠️ 残り${remaining}${unitText}を${nouhinState.quantity - remaining}${unitText}超えています`;
+    note.style.color = '#ff9500';
+  } else {
+    note.textContent = '';
+  }
 }
 
 function submitNouhin() {
@@ -3228,6 +3232,12 @@ function submitNouhin() {
     + `📦 ${prefix}${nouhinState.product.code} ${nouhinState.product.name}${colorText}\n`
     + `🔢 ${nouhinState.quantity}${unitText}`;
   if (!confirm(msg)) return;
+  const remaining = nouhinState.sourceRecord ? nouhinState.sourceRecord.remaining : null;
+  if (remaining !== null && nouhinState.quantity > remaining) {
+    const over = nouhinState.quantity - remaining;
+    if (!confirm(`⚠️ 残り${remaining}${unitText}に対して${nouhinState.quantity}${unitText}の納品です（${over}${unitText}超過）。\n\n`
+      + `超過分は、同じ内職さん・商品・カラーの他の持ち出しがあれば、その残りから差し引かれます。\n本当に記録しますか？`)) return;
+  }
 
   const colorCode = (nouhinState.color || '').split(' ')[0];
   const record = {
