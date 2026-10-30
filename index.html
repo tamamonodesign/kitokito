@@ -953,7 +953,7 @@ h1 { font-size: 24px; text-align: center; padding: 20px 0 10px; }
 
     <div class="section-title" style="font-size:14px;">📦 商品</div>
     <div id="order-product-display" style="background:white; border-radius:12px; padding:14px; margin-bottom:8px; box-shadow:0 1px 4px rgba(0,0,0,0.06); min-height:44px; font-size:15px; color:#aeaeb2;">未選択</div>
-    <button class="menu-btn" onclick="openOrderProductPicker()" style="width:100%; padding:12px; margin-bottom:14px;"><div class="text">商品・カラーを選ぶ</div></button>
+    <button class="menu-btn" onclick="openOrderProductPicker()" style="width:100%; padding:12px; margin-bottom:14px;"><div class="text">商品・サイズ・カラーを選ぶ</div></button>
 
     <div class="section-title" style="font-size:14px;">🔢 数量</div>
     <div style="background:white; border-radius:12px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
@@ -5442,17 +5442,22 @@ function setOrderQty(v) {
 function openOrderProductPicker() {
   const el = document.getElementById('order-picker-list');
   let html = '';
-  // 商品グループごとに表示
+  // 商品グループごとに表示（サイズ展開がある商品はサイズごとに分けて表示）
   PRODUCTS.forEach(p => {
-    html += `<div style="background:white; border-radius:12px; padding:14px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-      <div style="font-size:15px; font-weight:600; margin-bottom:8px;">${p.code} ${p.name}</div>
-      <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
-    (p.colors || []).forEach(c => {
-      const code = c.split(' ')[0]; // "RD レッド" → "RD"
-      html += `<button onclick="selectOrderProduct('${p.code}', ${JSON.stringify(p.name).replace(/"/g,'&quot;')}, '${c.replace(/'/g,"&#39;")}')"
-        style="padding:8px 12px; background:#f2f2f7; border:none; border-radius:8px; font-size:13px; cursor:pointer;">${c}</button>`;
+    const sizes = (p.sizes && p.sizes.length > 0) ? p.sizes : [null];
+    sizes.forEach(sizeCode => {
+      const code = sizeCode || p.code;
+      const sizeLabel = sizeCode ? (SIZE_LABELS[sizeCode] || sizeCode) : '';
+      const name = sizeCode ? (SKU_NAMES[sizeCode] || p.name + '（' + sizeLabel + '）') : p.name;
+      html += `<div style="background:white; border-radius:12px; padding:14px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:15px; font-weight:600; margin-bottom:8px;">${code} ${p.name}${sizeCode ? ' ' + sizeLabel : ''}</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+      (sizeCode ? effectiveColorsForSize(p, sizeCode) : (p.colors || [])).forEach(c => {
+        html += `<button onclick="selectOrderProduct('${code}', ${JSON.stringify(name).replace(/"/g,'&quot;')}, '${c.replace(/'/g,"&#39;")}')"
+          style="padding:8px 12px; background:#f2f2f7; border:none; border-radius:8px; font-size:13px; cursor:pointer;">${c}</button>`;
+      });
+      html += `</div></div>`;
     });
-    html += `</div></div>`;
   });
   // パーツ
   PARTS_PRODUCTS.forEach(p => {
