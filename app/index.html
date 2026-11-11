@@ -2452,7 +2452,7 @@ const SKU_NAMES = {
   'IBL': 'イラストバッグL', 'IBM': 'イラストバッグM', 'IBSS': 'イラストバッグSS',
   'LBL': 'レッスンバッグL', 'LBM': 'レッスンバッグM', 'LBS': 'レッスンバッグS', 'LBSS': 'レッスンバッグSS',
   'LBL_NAME': 'レッスンバッグL(名入)', 'LBM_NAME': 'レッスンバッグM(名入)', 'LBS_NAME': 'レッスンバッグS(名入)', 'LBSS_NAME': 'レッスンバッグSS(名入)',
-  'MASK': 'マスク', 'OMM': 'おむつ入れ',
+  'MASK': 'マスクケース', 'OMM': 'おむつ入れ',
   'PNAP': 'プチナップ',
   'SBL': 'シューズバッグL', 'SBM': 'シューズバッグM',
   'SBDL': 'DカンシューズバッグL', 'SBDM': 'DカンシューズバッグM',
@@ -2490,7 +2490,7 @@ const SAIDAN_GROUPS = [
   { code: 'IB', name: 'イラストバッグ', sizes: ['IBL', 'IBM', 'IBSS'] },
   { code: 'KM', name: '給食袋', sizes: [] },
   { code: 'LB', name: 'レッスンバッグ', sizes: ['LBL', 'LBM', 'LBS', 'LBSS'] },
-  { code: 'MASK', name: 'マスクカバー', sizes: [] },
+  { code: 'MASK', name: 'マスクケース', sizes: [] },
   { code: 'OMM', name: 'おむつ入れ', sizes: [] },
   { code: 'PNAP', name: 'プチナップ', sizes: [] },
   { code: 'SB', name: 'シューズバッグ', sizes: ['SBL', 'SBM'] },
@@ -2643,6 +2643,14 @@ const MATERIAL_UNITS = {
 // ===== データ =====
 const STAFF_NAMES = ['郁子', '中務', '山中', '水谷', '西本', '平瀬', '川畑', '木原', '水崎', '高橋'];
 
+// 「枚」ではなく別の単位で数える商品（sku_masterのdefに unit があればそちらを優先）
+const PIECE_UNIT_OVERRIDES = { 'UCOV': 'セット' };
+// 商品コード（サイズコード可）から完成品の数え方を返す。パーツ（isParts）の「セット」判定は従来どおり呼び出し側で行う
+function pieceUnit(code) {
+  const p = PRODUCTS.find(p => p.code === code || (p.sizes || []).includes(code));
+  return (p && p.unit) || PIECE_UNIT_OVERRIDES[p ? p.code : code] || '枚';
+}
+
 // 持ち出し・納品用の商品リスト（グループ表示）
 const PRODUCTS = [
   { code: 'AP', name: 'エプロン巾着', sizes: ['APM', 'APS'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/a776c3183ea114cac14b30d7fcac1c6b.jpg',
@@ -2700,7 +2708,7 @@ const PRODUCTS = [
   { code: 'IB', name: 'イラストバッグ', sizes: ['IBL', 'IBM', 'IBSS'], img: 'https://baseec-img-mng.akamaized.net/images/item/origin/ef5a9ce0af40cf64bcd1453844762aa4.jpg',
     colors: ['KI 生成'],
     parts: ['表地 ×1', '裏地 ×1', 'ポケット ×1', 'お名前タグ ×1', '持ち手ベルト ×2'] },
-  { code: 'MASK', name: 'マスクカバー', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/b923f218687cf4b5d43e46c3421809c0.jpg',
+  { code: 'MASK', name: 'マスクケース', img: 'https://baseec-img-mng.akamaized.net/images/item/origin/b923f218687cf4b5d43e46c3421809c0.jpg',
     colors: ['N ノーマル', 'W ワイド'],
     parts: ['表地 ×1', 'スナップボタン ×2'] },
   { code: 'CC', name: 'カードケース',
@@ -2923,7 +2931,7 @@ function openInputScreen(product) {
   document.getElementById('qty-input').value = state.quantity;
 
   // 数量ラベル
-  document.getElementById('qty-label').textContent = product.isParts ? '数量（セット数）' : '数量（表地の枚数）';
+  document.getElementById('qty-label').textContent = product.isParts ? '数量（セット数）' : (pieceUnit(product.code) === 'セット' ? '数量（セット数）' : '数量（表地の枚数）');
 
   // カラーセクション：パーツ制作の場合は非表示
   const colorSection = document.getElementById('color-buttons').parentNode;
@@ -3039,7 +3047,7 @@ function submitForm() {
   gasPost('add', { record });
 
   const colorText = state.selectedProduct.isParts ? '' : state.selectedColor;
-  const unitText = state.selectedProduct.isParts ? 'セット' : '枚';
+  const unitText = state.selectedProduct.isParts ? 'セット' : pieceUnit(state.selectedProduct.code);
   document.getElementById('success-detail-lines').innerHTML =
     `<div style="font-size:13px; color:#86868b; margin-bottom:8px;">以下の内容で記録しました</div>`
     + `<div style="font-size:18px; font-weight:700; margin-bottom:6px;">${state.selectedProduct.code} ${state.selectedProduct.name}</div>`
@@ -3130,7 +3138,7 @@ function startNouhin() {
     byName[name].forEach(job => {
       const isParts = job.color === 'なし';
       const colorText = isParts ? '' : ` ${job.color}`;
-      const unitText = isParts ? (job.isShoulder ? '個' : 'セット') : (job.isShoulder ? '個' : '枚');
+      const unitText = isParts ? (job.isShoulder ? '個' : 'セット') : (job.isShoulder ? '個' : pieceUnit(job.product));
       const productName = job.productName || job.product;
       const prefix = job.isShoulder ? '🔗 ' : '';
       const jobLabel = job.isShoulder ? 'ショルダー加工持ち出し' : '持ち出し';
@@ -3162,7 +3170,7 @@ function selectNouhinJob(job) {
 
   const isParts = job.color === 'なし';
   const colorText = isParts ? '' : ` ${job.color}`;
-  const unitText = job.isShoulder ? '個' : (isParts ? 'セット' : '枚');
+  const unitText = job.isShoulder ? '個' : (isParts ? 'セット' : pieceUnit(job.product));
   const productName = job.productName || job.product;
   const prefix = job.isShoulder ? '🔗 ' : '';
   const jobLabel = job.isShoulder ? 'ショルダー加工持ち出し' : '持ち出し';
@@ -3204,7 +3212,7 @@ function updateNouhinBtn() {
   const isParts = nouhinState.product && nouhinState.product.isParts;
   const isShoulder = nouhinState.product && nouhinState.product.isShoulder;
   const colorText = isParts ? '' : ` ${nouhinState.color}`;
-  const unitText = isShoulder ? '個' : (isParts ? 'セット' : '枚');
+  const unitText = isShoulder ? '個' : (isParts ? 'セット' : pieceUnit(nouhinState.product.code));
   const prefix = isShoulder ? '🔗 ' : '';
   btn.textContent = `納品を記録する ✅ ${prefix}${nouhinState.product.code}${colorText} ×${nouhinState.quantity}${unitText}`;
   btn.className = 'submit-btn ready';
@@ -3224,7 +3232,7 @@ function submitNouhin() {
   const isParts = nouhinState.product.isParts;
   const isShoulder = nouhinState.product.isShoulder;
   const colorText = isParts ? '' : `\nカラー: ${nouhinState.color}`;
-  const unitText = isShoulder ? '個' : (isParts ? 'セット' : '枚');
+  const unitText = isShoulder ? '個' : (isParts ? 'セット' : pieceUnit(nouhinState.product.code));
   const prefix = isShoulder ? '🔗 ' : '';
   const recordType = isShoulder ? 'ショルダー加工納品' : '納品';
   const msg = `この内容で${isShoulder ? 'ショルダー加工納品' : '納品'}を記録しますか？\n\n`
@@ -3258,7 +3266,7 @@ function submitNouhin() {
   gasPost('add', { record });
 
   const nColorText = isParts ? '' : nouhinState.color;
-  const nUnitText = isParts ? 'セット' : '枚';
+  const nUnitText = isParts ? 'セット' : pieceUnit(nouhinState.product.code);
   document.getElementById('nouhin-success-detail-lines').innerHTML =
     `<div style="font-size:13px; color:#86868b; margin-bottom:8px;">以下の内容で記録しました</div>`
     + `<div style="font-size:18px; font-weight:700; margin-bottom:6px;">${nouhinState.product.code} ${nouhinState.product.name}</div>`
@@ -3754,7 +3762,7 @@ function submitWork(type) {
   const partInfo = type === 'saidan' ? ` / ${ws.partName}` : '';
   const colorDisp2 = type === 'saidan' ? colorLabel(ws.color) : ws.color;
   const skuName = SKU_NAMES[ws.product.code] ? ` ${SKU_NAMES[ws.product.code]}` : '';
-  let detailText = `${ws.product.code}${skuName} / ${colorDisp2}${partInfo} / ${ws.quantity}枚`;
+  let detailText = `${ws.product.code}${skuName} / ${colorDisp2}${partInfo} / ${ws.quantity}${pieceUnit(ws.product.code)}`;
   document.getElementById('work-success-detail').textContent = detailText;
   showScreen('screen-work-success');
 }
@@ -4095,7 +4103,7 @@ function startKenpin() {
       const i = d._batchIdx;
       const isParts = d.color === 'なし';
       const colorText = isParts ? '' : ` ${d.color}`;
-      const unitText = isParts ? 'セット' : '枚';
+      const unitText = isParts ? 'セット' : pieceUnit(d.product);
       const productName = d.productName || d.product;
       const dt = new Date(d.date);
       const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
@@ -4129,7 +4137,7 @@ function selectKenpinDelivery(delivery) {
 
   const isParts = delivery.color === 'なし';
   const colorText = isParts ? '' : ` ${delivery.color}`;
-  const unitText = isParts ? 'セット' : '枚';
+  const unitText = isParts ? 'セット' : pieceUnit(delivery.product);
   const productName = delivery.productName || delivery.product;
   const dt = new Date(delivery.date);
   const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
@@ -4300,7 +4308,7 @@ function submitKenpin() {
   const d = kenpinState.selectedDelivery;
   const isParts = d.color === 'なし';
   const colorText = isParts ? '' : `\nカラー: ${d.color}`;
-  const unitText = isParts ? 'セット' : '枚';
+  const unitText = isParts ? 'セット' : pieceUnit(d.product);
 
   let causeDetail = '';
   if (kenpinState.quantityBGrade > 0) {
@@ -4422,7 +4430,7 @@ function submitKenpinBatch() {
   selected.forEach(d => {
     const isParts = d.color === 'なし';
     const colorText = isParts ? '' : ` ${d.color}`;
-    const unitText = isParts ? 'セット' : '枚';
+    const unitText = isParts ? 'セット' : pieceUnit(d.product);
     msg += `・${d.product}${colorText}  ${d.quantity}${unitText}（${d.name}）\n`;
   });
   if (!confirm(msg)) return;
@@ -4456,7 +4464,7 @@ function submitKenpinBatch() {
   batchRecords.forEach(r => {
     const isParts = r.color === 'なし';
     const colorText = isParts ? '' : ` ${r.color}`;
-    const unitText = isParts ? 'セット' : '枚';
+    const unitText = isParts ? 'セット' : pieceUnit(r.product);
     detailHtml += `<div style="padding:6px 0; border-bottom:1px solid #f0f0f0;">
       <span style="font-weight:600;">${r.product}${colorText}</span>
       <span style="color:#86868b; font-size:13px; margin-left:8px;">✅ ${r.quantityOk}${unitText}</span>
@@ -4750,7 +4758,7 @@ function refreshMomDash() {
       el1.innerHTML = active.map(m => {
         const isShoulder = !!m.isShoulder;
         const isParts = m.color === 'なし';
-        const unit = isShoulder ? '個' : (isParts ? 'セット' : '枚');
+        const unit = isShoulder ? '個' : (isParts ? 'セット' : pieceUnit(m.product));
         const colorText = isParts ? '' : ` ${m.color}`;
         const prefix = isShoulder ? '🔗 ' : '';
         const label = isShoulder ? 'ショルダー加工持ち出し' : '持ち出し';
@@ -4779,7 +4787,7 @@ function refreshMomDash() {
       el2n.innerHTML = nouhin.map(r => {
         const isShoulder = r.type === 'ショルダー加工納品';
         const isParts = r.color === 'なし';
-        const unit = isShoulder ? '個' : (isParts ? 'セット' : '枚');
+        const unit = isShoulder ? '個' : (isParts ? 'セット' : pieceUnit(r.product));
         const colorText = isParts ? '' : ` ${r.color}`;
         const prefix = isShoulder ? '🔗 ' : '';
         const label = isShoulder ? 'ショルダー加工納品' : '納品';
@@ -4807,7 +4815,7 @@ function refreshMomDash() {
     } else {
       el3.innerHTML = kenpin.map(r => {
         const isParts = r.color === 'なし';
-        const unit = isParts ? 'セット' : '枚';
+        const unit = isParts ? 'セット' : pieceUnit(r.product);
         const colorText = isParts ? '' : ` ${r.color}`;
         const ok = r.quantityOk || 0, b = r.quantityBGrade || 0, ng = r.quantityRejected || 0;
         return `<div class="alert-card">
@@ -4872,7 +4880,7 @@ function openEditRecord(record) {
 
   const isMaterial = record.type === '材料発注' || record.type === '材料入荷';
   const isParts = record.color === 'なし';
-  const unit = isParts ? 'セット' : '枚';
+  const unit = isParts ? 'セット' : pieceUnit(record.product);
   const colorText = isParts ? '' : ` ${record.color}`;
 
   document.getElementById('edit-record-type').textContent = `種別：${record.type}`;
@@ -5111,7 +5119,7 @@ function recordListLabel(r) {
   const productLabel = isMaterial ? product : `${product}${colorText}`;
   let detail = '';
   if (r.type === '持ち出し' || r.type === 'ショルダー加工持ち出し' || r.type === '納品' || r.type === 'ショルダー加工納品') {
-    const unit = (r.type.includes('ショルダー')) ? '個' : (isParts ? 'セット' : '枚');
+    const unit = (r.type.includes('ショルダー')) ? '個' : (isParts ? 'セット' : pieceUnit(r.product));
     detail = `${r.quantity || 0}${unit}` + (r.name ? ` / 👤${r.name}` : '');
     if (r.targetSku) detail += ` → ${r.targetSku}`;
   } else if (r.type === '検品完了') {
@@ -5332,7 +5340,7 @@ function refreshOrderList() {
     }
     el.innerHTML = list.map(o => {
       const p = progress[o.id] || { orderQty: o.quantity, nouhin:0, sewing:0, remaining:o.quantity };
-      const unit = isPartsColor(o.color) ? 'セット' : '枚';
+      const unit = isPartsColor(o.color) ? 'セット' : pieceUnit(o.product);
       const colorText = o.color && o.color !== 'なし' ? ` ${o.color}` : '';
       const due = o.dueDate ? `📅 ${o.dueDate}` : '';
       const isDone = p.autoStatus === 'done';
@@ -5516,7 +5524,7 @@ function openOrderDetail(id) {
 
   const prio = ORDER_PRIORITIES.find(p => p.id === o.priority) || ORDER_PRIORITIES[1];
   const due = o.dueDate ? `📅 納期：${o.dueDate}` : '📅 納期：未設定';
-  const unit = (o.color === 'なし') ? 'セット' : '枚';
+  const unit = (o.color === 'なし') ? 'セット' : pieceUnit(o.product);
   document.getElementById('order-detail-info').innerHTML =
     `<div style="font-size:13px; color:#86868b; margin-bottom:4px;">発注内容</div>`
     + `<div style="font-size:18px; font-weight:700;">${o.product}${o.color && o.color !== 'なし' ? ' / ' + o.color : ''}</div>`
@@ -8896,7 +8904,7 @@ function refreshProductionTarget() {
     FBXL:'フリルXL', GIFTBAG:'ギフトバッグ', HA:'はみがき袋', IBL:'巾着バッグL',
     IBM:'巾着バッグM', IBSS:'巾着バッグSS', KM:'給食袋', LBL:'レッスンバッグL',
     LBM:'レッスンバッグM', LBS:'レッスンバッグS', LBSS:'レッスンバッグSS',
-    MASK:'マスク', OMM:'お着替え袋M', PNAP:'ナップサック',
+    MASK:'マスクケース', OMM:'お着替え袋M', PNAP:'ナップサック',
     SBDL:'シューズDenim L', SBDM:'シューズDenim M',
     SBL:'シューズバッグL', SBM:'シューズバッグM', SNAP:'シンプルナップ',
     TAL:'体操着袋L', TAM:'体操着袋M', TP:'ティッシュポケット'
